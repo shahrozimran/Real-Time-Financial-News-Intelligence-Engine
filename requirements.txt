@@ -1,0 +1,30 @@
+# ============================================================
+# Real-Time Financial News Intelligence Engine
+# Python dependencies — Week 1
+# Install: pip install -r requirements.txt
+# ============================================================
+
+# Data ingestion & streaming
+kafka-python==2.0.2
+feedparser==6.0.11
+yfinance==0.2.38
+
+# Web framework
+flask==3.0.3
+
+# Data handling
+pandas==2.2.2
+requests==2.31.0
+
+# Environment / config
+python-dotenv==1.0.1
+
+# ── Week 2 (install now to verify compatibility) ──────────────
+pyspark==3.5.1
+
+# ── Week 3 (uncomment when needed) ───────────────────────────
+# chromadb==0.5.3
+# sentence-transformers==3.0.1
+# openai==1.30.1
+# langchain==0.2.5
+# langchain-community==0.2.5

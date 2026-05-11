@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinIntel Engine — Real-Time Financial Intelligence</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PAGE LOADER
+══════════════════════════════════════════ -->
+<div id="page-loader">
+  <div class="loader-ring"></div>
+  <div class="loader-text">Initialising FinIntel Engine</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════ -->
+<aside id="sidebar">
+  <a class="sidebar-logo" href="/">
+    <div class="sidebar-logo-icon"><i class="bi bi-graph-up-arrow"></i></div>
+    <div>
+      <div class="sidebar-logo-text">FinIntel</div>
+      <div class="sidebar-logo-sub">Intelligence Engine</div>
+    </div>
+  </a>
+
+  <nav class="sidebar-nav">
+    <div class="sidebar-section-label">Main</div>
+    <button class="nav-item-link active" onclick="showSection('dashboard',this)">
+      <i class="bi bi-grid-1x2"></i> Dashboard
+    </button>
+    <button class="nav-item-link" onclick="showSection('market',this)">
+      <i class="bi bi-bar-chart-line"></i> Market Prices
+    </button>
+    <button class="nav-item-link" onclick="showSection('news',this)">
+      <i class="bi bi-newspaper"></i> News Feed
+    </button>
+
+    <div class="sidebar-section-label">Intelligence</div>
+    <button class="nav-item-link" onclick="showSection('analysis',this)">
+      <i class="bi bi-graph-up"></i> Sentiment Analysis
+    </button>
+    <button class="nav-item-link" onclick="showSection('risk',this)">
+      <i class="bi bi-shield-exclamation"></i> Risk Alerts
+      <span class="nav-badge" id="risk-badge">5</span>
+    </button>
+    <button class="nav-item-link" onclick="showSection('chat',this)">
+      <i class="bi bi-cpu"></i> AI Chat
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sys-status">
+      <div class="sys-status-item"><div class="status-dot online"></div> Flask Server</div>
+      <div class="sys-status-item"><div class="status-dot warn" id="kafka-dot"></div> <span id="kafka-label">Kafka — Start broker</span></div>
+      <div class="sys-status-item"><div class="status-dot offline" id="spark-dot"></div> <span id="spark-label">PySpark — Week 2</span></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════
+     MAIN WRAPPER
+══════════════════════════════════════════ -->
+<div id="main-wrapper">
+
+  <!-- ── Topbar ── -->
+  <header id="topbar">
+    <button id="sidebar-toggle" style="background:none;border:none;color:var(--text-secondary);font-size:1.2rem;cursor:pointer;padding:4px 8px;display:none" onclick="document.getElementById('sidebar').classList.toggle('open')">
+      <i class="bi bi-list"></i>
+    </button>
+    <span class="topbar-title" id="topbar-title">Dashboard</span>
+    <span class="live-badge"><span class="dot"></span>Live</span>
+
+    <!-- Ticker tape -->
+    <div class="ticker-wrapper">
+      <div class="ticker-track" id="ticker-track">
+        <!-- populated by JS, duplicated for infinite loop -->
+      </div>
+    </div>
+
+    <span class="topbar-time" id="topbar-clock">{{ now }}</span>
+    <button class="topbar-refresh" id="refresh-btn" onclick="refreshAll(this)" title="Refresh data">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </header>
+
+  <!-- ── Page Content ── -->
+  <main id="page-content">
+
+    <!-- ════════════════════════ DASHBOARD ════════════════════════ -->
+    <section id="sec-dashboard">
+
+      <!-- KPI Row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+
+        <div class="kpi-card" style="--kpi-accent:var(--accent-cyan)">
+          <div class="kpi-icon" style="color:var(--accent-cyan)"><i class="bi bi-newspaper"></i></div>
+          <div class="kpi-label">Articles Today</div>
+          <div class="kpi-value text-cyan" id="kpi-articles">—</div>
+          <div class="kpi-sub">Across 6 sources</div>
+          <i class="bi bi-newspaper kpi-bg-icon"></i>
+        </div>
+
+        <div class="kpi-card" style="--kpi-accent:var(--accent-green)">
+          <div class="kpi-icon" style="color:var(--accent-green)"><i class="bi bi-emoji-smile"></i></div>
+          <div class="kpi-label">Positive Sentiment</div>
+          <div class="kpi-value text-green" id="kpi-positive">—</div>
+          <div class="kpi-sub">Today's score</div>
+          <i class="bi bi-emoji-smile kpi-bg-icon"></i>
+        </div>
+
+        <div class="kpi-card" style="--kpi-accent:var(--accent-red)">
+          <div class="kpi-icon" style="color:var(--accent-red)"><i class="bi bi-emoji-frown"></i></div>
+          <div class="kpi-label">Negative Sentiment</div>
+          <div class="kpi-value text-red" id="kpi-negative">—</div>
+          <div class="kpi-sub">Today's score</div>
+          <i class="bi bi-emoji-frown kpi-bg-icon"></i>
+        </div>
+
+        <div class="kpi-card" style="--kpi-accent:var(--accent-yellow)">
+          <div class="kpi-icon" style="color:var(--accent-yellow)"><i class="bi bi-activity"></i></div>
+          <div class="kpi-label">Active Tickers</div>
+          <div class="kpi-value text-yellow" id="kpi-tickers">{{ tickers | length }}</div>
+          <div class="kpi-sub">Stocks · Indices · Crypto</div>
+          <i class="bi bi-activity kpi-bg-icon"></i>
+        </div>
+      </div>
+
+      <!-- Row 2: Prices + Donut -->
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:18px">
+
+        <!-- Market Prices -->
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-yellow"><i class="bi bi-bar-chart-line"></i></div>
+            Market Prices
+            <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+              <span style="font-size:0.68rem;color:var(--text-muted);font-weight:400">Auto-refresh 60s</span>
+              <button class="topbar-refresh" onclick="loadPrices()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div style="overflow:auto;max-height:290px">
+            <table class="prices-table">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th style="text-align:right">Price</th>
+                  <th style="text-align:right">Change</th>
+                  <th style="text-align:right">Volume</th>
+                </tr>
+              </thead>
+              <tbody id="prices-tbody">
+                <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Sentiment Donut -->
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-purple"><i class="bi bi-pie-chart"></i></div>
+            Today's Sentiment
+          </div>
+          <div class="g-card-body" style="display:flex;align-items:center;justify-content:space-around;gap:16px">
+            <div class="donut-wrap" style="width:150px;height:150px;flex-shrink:0">
+              <canvas id="donutChart" width="150" height="150"></canvas>
+              <div class="donut-center">
+                <div class="dc-value" id="donut-pct">—</div>
+                <div class="dc-label">positive</div>
+              </div>
+            </div>
+            <div class="sentiment-legend">
+              <div class="legend-item">
+                <div class="legend-dot" style="background:var(--accent-green)"></div>
+                <span class="l-label">Positive</span>
+                <span class="l-value text-green" id="leg-pos">—</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:var(--accent-blue)"></div>
+                <span class="l-label">Neutral</span>
+                <span class="l-value text-blue" id="leg-neu">—</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot" style="background:var(--accent-red)"></div>
+                <span class="l-label">Negative</span>
+                <span class="l-value text-red" id="leg-neg">—</span>
+              </div>
+              <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px">Market Mood</div>
+                <div style="font-size:0.9rem;font-weight:700;color:var(--accent-green)" id="market-mood">Cautiously Bullish</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Sentiment Trend (full width) -->
+      <div class="g-card" style="margin-bottom:18px">
+        <div class="g-card-header">
+          <div class="header-icon hi-cyan"><i class="bi bi-graph-up"></i></div>
+          7-Day Sentiment Trend
+          <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400">News + social media combined score</span>
+        </div>
+        <div class="g-card-body chart-container" style="height:200px">
+          <canvas id="sentimentChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Row 4: News + Chat -->
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px">
+
+        <!-- Latest News -->
+        <div class="g-card" style="display:flex;flex-direction:column">
+          <div class="g-card-header">
+            <div class="header-icon hi-green"><i class="bi bi-newspaper"></i></div>
+            Latest Financial News
+            <div style="margin-left:auto;display:flex;gap:6px;align-items:center" class="news-tabs">
+              <span class="nav-link active" onclick="filterNews('',this)">All</span>
+              <span class="nav-link" onclick="filterNews('positive',this)">Positive</span>
+              <span class="nav-link" onclick="filterNews('negative',this)">Negative</span>
+              <span class="nav-link" onclick="filterNews('neutral',this)">Neutral</span>
+            </div>
+          </div>
+          <div class="g-card-body" id="news-list" style="overflow-y:auto;max-height:380px;flex:1">
+            <p style="text-align:center;color:var(--text-muted);padding:24px 0">Loading news…</p>
+          </div>
+        </div>
+
+        <!-- AI Chat -->
+        <div class="g-card" style="display:flex;flex-direction:column">
+          <div class="g-card-header">
+            <div class="header-icon hi-purple"><i class="bi bi-cpu"></i></div>
+            AI Financial Agent
+            <span style="margin-left:8px;font-size:0.62rem;background:rgba(139,92,246,0.15);color:var(--accent-purple);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;font-weight:600">RAG · Week 3</span>
+          </div>
+
+          <div id="chat-messages" style="padding:14px;overflow-y:auto;min-height:220px;max-height:280px;flex:1">
+            <div style="text-align:center;padding:20px 0">
+              <i class="bi bi-robot" style="font-size:2rem;color:var(--text-muted);display:block;margin-bottom:8px"></i>
+              <span style="font-size:0.78rem;color:var(--text-muted)">Ask anything about a stock, sector, or market event</span>
+            </div>
+          </div>
+
+          <div class="g-card-footer" style="display:flex;flex-direction:column;gap:8px">
+            <!-- Quick chips -->
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              <button class="quick-chip" onclick="setPrompt(this)">Why is TSLA dropping?</button>
+              <button class="quick-chip" onclick="setPrompt(this)">NVDA sentiment today?</button>
+              <button class="quick-chip" onclick="setPrompt(this)">Top market risks?</button>
+              <button class="quick-chip" onclick="setPrompt(this)">Summarise NASDAQ news</button>
+            </div>
+            <!-- Input -->
+            <div class="chat-input-wrap">
+              <input type="text" id="chat-input" placeholder="Ask the AI agent…" onkeydown="if(event.key==='Enter')sendChat()"/>
+              <button class="chat-send-btn" id="chat-send" onclick="sendChat()">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section><!-- /dashboard -->
+
+    <!-- ════════════════════════ RISK ALERTS ════════════════════════ -->
+    <section id="sec-risk" style="display:none">
+      <div class="g-card">
+        <div class="g-card-header">
+          <div class="header-icon hi-red"><i class="bi bi-shield-exclamation"></i></div>
+          Risk Alerts
+          <span style="margin-left:8px;font-size:0.68rem;color:var(--text-muted);font-weight:400">Powered by sentiment analysis + price movement detection</span>
+        </div>
+        <div class="g-card-body" id="risk-list" style="max-height:600px;overflow-y:auto">
+          <p style="text-align:center;color:var(--text-muted);padding:24px 0">Loading alerts…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════ MARKET (standalone) ════════════════════════ -->
+    <section id="sec-market" style="display:none">
+      <div class="g-card">
+        <div class="g-card-header">
+          <div class="header-icon hi-yellow"><i class="bi bi-bar-chart-line"></i></div>
+          Full Market Prices
+          <button class="topbar-refresh ms-auto" onclick="loadPrices()"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div style="overflow:auto">
+          <table class="prices-table" id="market-table">
+            <thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">Change</th><th style="text-align:right">Volume</th></tr></thead>
+            <tbody id="market-tbody"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════ NEWS (standalone) ════════════════════════ -->
+    <section id="sec-news" style="display:none">
+      <div class="g-card">
+        <div class="g-card-header">
+          <div class="header-icon hi-green"><i class="bi bi-newspaper"></i></div>
+          Financial News Feed
+          <div style="margin-left:auto;display:flex;gap:6px" class="news-tabs">
+            <span class="nav-link active" onclick="filterNews('',this)">All</span>
+            <span class="nav-link" onclick="filterNews('positive',this)">Positive</span>
+            <span class="nav-link" onclick="filterNews('negative',this)">Negative</span>
+            <span class="nav-link" onclick="filterNews('neutral',this)">Neutral</span>
+          </div>
+        </div>
+        <div class="g-card-body" id="news-list-full" style="max-height:700px;overflow-y:auto">
+          <p style="text-align:center;color:var(--text-muted);padding:24px 0">Loading…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════ ANALYSIS ════════════════════════ -->
+    <section id="sec-analysis" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-cyan"><i class="bi bi-graph-up"></i></div>
+            7-Day Sentiment Trend
+          </div>
+          <div class="g-card-body chart-container" style="height:260px">
+            <canvas id="sentimentChart2"></canvas>
+          </div>
+        </div>
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-purple"><i class="bi bi-pie-chart"></i></div>
+            Sentiment Breakdown — Today
+          </div>
+          <div class="g-card-body" style="display:flex;align-items:center;justify-content:space-around;gap:16px;height:260px">
+            <div class="donut-wrap" style="width:180px;height:180px;flex-shrink:0">
+              <canvas id="donutChart2" width="180" height="180"></canvas>
+              <div class="donut-center">
+                <div class="dc-value" id="donut-pct2">—</div>
+                <div class="dc-label">positive</div>
+              </div>
+            </div>
+            <div class="sentiment-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent-green)"></div><span class="l-label">Positive</span><span class="l-value text-green" id="leg-pos2">—</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent-blue)"></div><span class="l-label">Neutral</span><span class="l-value text-blue" id="leg-neu2">—</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red)"></div><span class="l-label">Negative</span><span class="l-value text-red" id="leg-neg2">—</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════ CHAT (standalone) ════════════════════════ -->
+    <section id="sec-chat" style="display:none">
+      <div class="g-card" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column">
+        <div class="g-card-header">
+          <div class="header-icon hi-purple"><i class="bi bi-cpu"></i></div>
+          AI Financial Agent
+          <span style="margin-left:8px;font-size:0.62rem;background:rgba(139,92,246,0.15);color:var(--accent-purple);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;font-weight:600">RAG · Multi-Agent · Week 3</span>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <span style="font-size:0.7rem;background:rgba(16,185,129,0.1);color:var(--accent-green);border:1px solid rgba(16,185,129,0.2);padding:2px 8px;border-radius:999px">
+              <i class="bi bi-person-fill me-1"></i>Market Analyst
+            </span>
+            <span style="font-size:0.7rem;background:rgba(239,68,68,0.1);color:var(--accent-red);border:1px solid rgba(239,68,68,0.2);padding:2px 8px;border-radius:999px">
+              <i class="bi bi-shield-fill me-1"></i>Risk Manager
+            </span>
+            <span style="font-size:0.7rem;background:rgba(59,130,246,0.1);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.2);padding:2px 8px;border-radius:999px">
+              <i class="bi bi-briefcase-fill me-1"></i>Portfolio Advisor
+            </span>
+          </div>
+        </div>
+        <div id="chat-messages-full" style="padding:20px;overflow-y:auto;min-height:400px;max-height:500px;display:flex;flex-direction:column;gap:10px">
+          <div style="text-align:center;padding:40px 0">
+            <i class="bi bi-robot" style="font-size:3rem;color:var(--text-muted);display:block;margin-bottom:10px"></i>
+            <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:4px">Three AI agents ready to assist</div>
+            <div style="font-size:0.78rem;color:var(--text-muted)">RAG pipeline will be activated in Week 3</div>
+          </div>
+        </div>
+        <div class="g-card-footer" style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <button class="quick-chip" onclick="setPromptFull(this)">Why is the tech sector dropping?</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">TSLA sentiment analysis</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Main market risks today</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Summarise NASDAQ news</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Should I be cautious about AMZN?</button>
+          </div>
+          <div class="chat-input-wrap">
+            <input type="text" id="chat-input-full" placeholder="Ask about any stock, sector, index, or market event…" onkeydown="if(event.key==='Enter')sendChatFull()"/>
+            <button class="chat-send-btn" id="chat-send-full" onclick="sendChatFull()">
+              <i class="bi bi-send-fill"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div><!-- /main-wrapper -->
+
+
+<!-- ══════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+'use strict';
+
+// ── Shared state ──────────────────────────────────────────────────
+let pricesData = {};
+let sentimentTrend = [];
+let donutChart1 = null, donutChart2 = null, trendChart1 = null, trendChart2 = null;
+let currentNewsFilter = '';
+
+const SECTION_TITLES = {
+  dashboard: 'Dashboard', market: 'Market Prices', news: 'News Feed',
+  analysis: 'Sentiment Analysis', risk: 'Risk Alerts', chat: 'AI Chat',
+};
+
+// ── Navigation ────────────────────────────────────────────────────
+function showSection(name, btn) {
+  document.querySelectorAll('[id^="sec-"]').forEach(s => s.style.display = 'none');
+  document.getElementById('sec-' + name).style.display = '';
+  document.querySelectorAll('.nav-item-link').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
+
+  if (name === 'analysis') initAnalysisCharts();
+}
+
+// ── Clock ─────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now = new Date();
+    document.getElementById('topbar-clock').textContent =
+      now.toUTCString().replace(' GMT','') + ' UTC';
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ── Ticker tape ───────────────────────────────────────────────────
+function buildTicker(data) {
+  const items = Object.entries(data).map(([t, i]) => {
+    const dir = i.change_pct >= 0 ? 'up' : 'down';
+    const arrow = i.change_pct >= 0 ? '▲' : '▼';
+    return `<span class="ticker-item">
+      <span class="ticker-symbol">${t}</span>
+      <span class="ticker-price">$${i.close.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span class="ticker-change ${dir}">${arrow}${Math.abs(i.change_pct).toFixed(2)}%</span>
+    </span>`;
+  }).join('');
+  // Duplicate for seamless loop
+  const track = document.getElementById('ticker-track');
+  track.innerHTML = items + items;
+}
+
+// ── Prices ────────────────────────────────────────────────────────
+const MAX_VOL = 90_000_000;
+function priceRow(ticker, info) {
+  const up   = info.change_pct >= 0;
+  const vol  = info.volume > 0 ? info.volume.toLocaleString() : '—';
+  const pct  = (info.volume / MAX_VOL * 100).toFixed(0);
+  return `<tr>
+    <td><span class="ticker-chip"><span class="t-dot" style="background:${up?'var(--accent-green)':'var(--accent-red)'}"></span>${ticker}</span></td>
+    <td style="text-align:right" class="${up?'price-up':'price-down'}">$${info.close.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    <td style="text-align:right"><span class="change-pill ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(info.change_pct).toFixed(2)}%</span></td>
+    <td style="text-align:right">
+      <div style="font-size:0.75rem;color:var(--text-secondary)">${vol}</div>
+      ${info.volume>0?`<div class="vol-bar"><div class="vol-bar-fill" style="width:${pct}%"></div></div>`:''}
+    </td>
+  </tr>`;
+}
+
+async function loadPrices() {
+  const resp = await fetch('/api/prices');
+  pricesData = await resp.json();
+  const rows = Object.entries(pricesData).map(([t,i]) => priceRow(t,i)).join('');
+  document.getElementById('prices-tbody').innerHTML = rows;
+  const mb = document.getElementById('market-tbody');
+  if (mb) mb.innerHTML = rows;
+  document.getElementById('kpi-tickers').textContent = Object.keys(pricesData).length;
+  buildTicker(pricesData);
+}
+
+// ── News ──────────────────────────────────────────────────────────
+function relativeTime(iso) {
+  const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (diff < 1) return 'Just now';
+  if (diff < 60) return diff + 'm ago';
+  if (diff < 1440) return Math.floor(diff/60) + 'h ago';
+  return Math.floor(diff/1440) + 'd ago';
+}
+
+function newsHTML(articles) {
+  if (!articles.length) return '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No articles found.</p>';
+  return articles.map(a => `
+    <div class="news-item">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <a href="${a.url}" target="_blank" class="news-item-title">${a.title}</a>
+        <span class="sent-badge ${a.sentiment}">${a.sentiment||'n/a'}</span>
+      </div>
+      <p class="news-summary">${a.summary||''}</p>
+      <div class="news-item-meta">
+        <span class="news-source"><i class="bi bi-broadcast" style="margin-right:3px"></i>${a.source}</span>
+        <span style="color:var(--text-muted);font-size:0.65rem">•</span>
+        <span class="news-time">${relativeTime(a.published)}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function loadNews(sentiment) {
+  if (sentiment !== undefined) currentNewsFilter = sentiment;
+  const url = `/api/news?limit=20${currentNewsFilter ? '&sentiment='+currentNewsFilter : ''}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  document.getElementById('kpi-articles').textContent = data.count;
+  const html = newsHTML(data.articles);
+  const el1 = document.getElementById('news-list');
+  const el2 = document.getElementById('news-list-full');
+  if (el1) el1.innerHTML = html;
+  if (el2) el2.innerHTML = html;
+}
+
+function filterNews(sentiment, tab) {
+  document.querySelectorAll('.news-tabs .nav-link').forEach(t => t.classList.remove('active'));
+  if (tab) tab.classList.add('active');
+  loadNews(sentiment);
+}
+
+// ── Sentiment Data & Charts ───────────────────────────────────────
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#7a9abf', boxWidth: 10, font: { size: 11 } } }, tooltip: { mode: 'index', intersect: false } },
+  scales: {
+    x: { ticks: { color: '#3f5c7a', font:{ size:10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+    y: { ticks: { color: '#3f5c7a', font:{ size:10 } }, grid: { color: 'rgba(255,255,255,0.04)' }, min: 0, max: 100 },
+  },
+};
+
+function buildTrendDatasets(trend) {
+  return {
+    labels: trend.map(d => d.date.slice(5)),
+    datasets: [
+      { label:'Positive', data: trend.map(d=>d.positive), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.08)', tension:0.4, fill:true, pointRadius:3, pointHoverRadius:5, borderWidth:2 },
+      { label:'Neutral',  data: trend.map(d=>d.neutral),  borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.05)', tension:0.4, fill:true, pointRadius:3, pointHoverRadius:5, borderWidth:2 },
+      { label:'Negative', data: trend.map(d=>d.negative), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.07)',  tension:0.4, fill:true, pointRadius:3, pointHoverRadius:5, borderWidth:2 },
+    ]
+  };
+}
+
+function buildDonut(canvasId, pos) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [pos, 28, 100-pos-28],
+        backgroundColor: ['rgba(16,185,129,0.85)', 'rgba(59,130,246,0.85)', 'rgba(239,68,68,0.85)'],
+        borderWidth: 0, hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: false, cutout: '72%',
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      animation: { animateRotate: true, duration: 800 },
+    }
+  });
+}
+
+function setDonutKPIs(trend, suffix) {
+  const latest = trend[trend.length - 1];
+  document.getElementById('donut-pct' + suffix).textContent = latest.positive + '%';
+  document.getElementById('leg-pos' + suffix).textContent = latest.positive + '%';
+  document.getElementById('leg-neu' + suffix).textContent = latest.neutral  + '%';
+  document.getElementById('leg-neg' + suffix).textContent = latest.negative + '%';
+  const mood = latest.positive >= 45 ? 'Cautiously Bullish' : latest.negative >= 35 ? 'Risk-Off Mode' : 'Mixed Signals';
+  const el = document.getElementById('market-mood');
+  if (el) { el.textContent = mood; el.style.color = latest.positive >= 45 ? 'var(--accent-green)' : latest.negative >= 35 ? 'var(--accent-red)' : 'var(--accent-yellow)'; }
+  const pctKpi = document.getElementById('kpi-positive');
+  if (pctKpi) pctKpi.textContent = latest.positive + '%';
+  const negKpi = document.getElementById('kpi-negative');
+  if (negKpi) negKpi.textContent = latest.negative + '%';
+}
+
+async function loadSentimentCharts() {
+  const resp = await fetch('/api/sentiment-trend');
+  sentimentTrend = await resp.json();
+  const latest = sentimentTrend[sentimentTrend.length - 1];
+
+  // Trend chart on dashboard
+  const ctx1 = document.getElementById('sentimentChart');
+  if (ctx1 && !trendChart1) {
+    trendChart1 = new Chart(ctx1, { type:'line', data: buildTrendDatasets(sentimentTrend), options: { ...CHART_DEFAULTS } });
+  }
+  // Donut on dashboard
+  if (!donutChart1) donutChart1 = buildDonut('donutChart', latest.positive);
+  setDonutKPIs(sentimentTrend, '');
+}
+
+function initAnalysisCharts() {
+  if (!sentimentTrend.length) return;
+  const latest = sentimentTrend[sentimentTrend.length - 1];
+  const ctx2 = document.getElementById('sentimentChart2');
+  if (ctx2 && !trendChart2) {
+    trendChart2 = new Chart(ctx2, { type:'line', data: buildTrendDatasets(sentimentTrend), options: { ...CHART_DEFAULTS } });
+  }
+  if (!donutChart2) donutChart2 = buildDonut('donutChart2', latest.positive);
+  setDonutKPIs(sentimentTrend, '2');
+}
+
+// ── Risk Alerts ───────────────────────────────────────────────────
+const RISK_ICONS = { high: 'bi-exclamation-triangle-fill', medium: 'bi-exclamation-circle-fill', low: 'bi-info-circle-fill' };
+
+async function loadRiskAlerts() {
+  const resp = await fetch('/api/risk-alerts');
+  const data = await resp.json();
+  document.getElementById('risk-badge').textContent = data.count;
+  const html = data.alerts.map(a => `
+    <div class="risk-item">
+      <div class="risk-level-icon ${a.level}"><i class="bi ${RISK_ICONS[a.level]||'bi-dot'}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span class="risk-ticker">${a.ticker}</span>
+          <span class="risk-signal">${a.signal}</span>
+          <span style="font-size:0.62rem;padding:1px 6px;border-radius:999px;font-weight:600;background:${a.level==='high'?'rgba(239,68,68,0.12)':a.level==='medium'?'rgba(245,158,11,0.12)':'rgba(59,130,246,0.12)'};color:${a.level==='high'?'var(--accent-red)':a.level==='medium'?'var(--accent-yellow)':'var(--accent-blue)'}">${a.level.toUpperCase()}</span>
+        </div>
+        <div class="risk-detail">${a.detail}</div>
+      </div>
+      <div class="risk-time">${a.time}</div>
+    </div>`).join('');
+  document.getElementById('risk-list').innerHTML = html || '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No active alerts.</p>';
+}
+
+// ── Chat ──────────────────────────────────────────────────────────
+function appendMsg(containerId, role, html, id) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const wrap = document.createElement('div');
+  if (id) wrap.id = id;
+  wrap.className = 'chat-msg' + (role === 'user' ? ' user-msg' : '');
+  wrap.innerHTML = role === 'user'
+    ? `<div class="chat-avatar user-av"><i class="bi bi-person-fill"></i></div><div class="chat-bubble user-bubble">${html}</div>`
+    : `<div class="chat-avatar agent-av"><i class="bi bi-cpu-fill"></i></div><div class="chat-bubble agent-bubble">${html}</div>`;
+  c.appendChild(wrap);
+  c.scrollTop = c.scrollHeight;
+}
+
+async function sendChatTo(containerId, inputId, sendBtnId) {
+  const input = document.getElementById(inputId);
+  const btn   = document.getElementById(sendBtnId);
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  btn.disabled = true;
+
+  appendMsg(containerId, 'user', q);
+  const lid = 'ld-' + Date.now();
+  appendMsg(containerId, 'agent', '<span class="typing-dots"><span></span><span></span><span></span></span>', lid);
+
+  try {
+    const resp = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:q}) });
+    const data = await resp.json();
+    document.getElementById(lid)?.remove();
+    appendMsg(containerId, 'agent', data.answer);
+  } catch {
+    document.getElementById(lid)?.remove();
+    appendMsg(containerId, 'agent', 'Error reaching the AI backend.');
+  }
+  btn.disabled = false;
+}
+
+function sendChat()     { sendChatTo('chat-messages',      'chat-input',      'chat-send'); }
+function sendChatFull() { sendChatTo('chat-messages-full', 'chat-input-full', 'chat-send-full'); }
+
+function setPrompt(btn)     { document.getElementById('chat-input').value = btn.textContent.trim(); document.getElementById('chat-input').focus(); }
+function setPromptFull(btn) { document.getElementById('chat-input-full').value = btn.textContent.trim(); document.getElementById('chat-input-full').focus(); }
+
+// ── Refresh all ───────────────────────────────────────────────────
+async function refreshAll(btn) {
+  if (btn) { btn.classList.add('spinning'); }
+  await Promise.all([loadPrices(), loadNews(), loadRiskAlerts()]);
+  if (btn) { setTimeout(() => btn.classList.remove('spinning'), 600); }
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  startClock();
+  await Promise.all([loadPrices(), loadNews(), loadSentimentCharts(), loadRiskAlerts()]);
+
+  // Hide loader
+  setTimeout(() => document.getElementById('page-loader').classList.add('hidden'), 400);
+
+  // Show sidebar toggle on mobile
+  if (window.innerWidth < 992) {
+    document.getElementById('sidebar-toggle').style.display = 'block';
+  }
+
+  // Auto-refresh every 60s
+  setInterval(() => { loadPrices(); loadNews(); }, 60_000);
+});
+</script>
+</body>
+</html>
