@@ -38,3 +38,6 @@ metastore_db/
 # Model cache
 .cache/
 huggingface/
+
+# Docker
+kafka_data/
