@@ -11,7 +11,7 @@ and RAG-powered conversational AI.
 | Tool | Version | Notes |
 |------|---------|-------|
 | Python | 3.10+ | `python --version` |
-| Java JDK | 11 | Required by Kafka & PySpark. Set `JAVA_HOME`. |
+| Java JDK | 17 | Required by Kafka & PySpark. Set `JAVA_HOME`. |
 | Apache Kafka | 3.6.x | Download from https://kafka.apache.org/downloads |
 | pip | latest | `python -m pip install --upgrade pip` |
 
@@ -30,6 +30,11 @@ python -m venv venv
 ### 2. Install Python dependencies
 ```powershell
 pip install -r requirements.txt
+```
+
+### 2b. Download NLTK data (one-time)
+```powershell
+python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('punkt_tab')"
 ```
 
 ### 3. Configure environment
@@ -95,6 +100,22 @@ python ingestion/consumer_test.py stock-prices
 
 ---
 
+## Running the PySpark Pipeline
+
+Process sample data through the full cleaning → sentiment → analytics pipeline:
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot"
+python processing/batch_pipeline.py
+```
+
+This generates:
+- `data/processed/articles.json` — 55 articles with sentiment labels
+- `data/processed/prices.json` — latest price snapshot for 10 tickers
+- `data/processed/aggregates.json` — sentiment by source, asset, and time
+- `data/analytics.db` — SQLite database with all aggregates
+
+---
+
 ## Running the Flask Dashboard
 
 ```powershell
@@ -102,6 +123,9 @@ python webapp/app.py
 ```
 
 Open http://localhost:5000 in your browser.
+
+The dashboard automatically reads from pipeline output in `data/processed/`.
+If the pipeline hasn't run yet, placeholder data is shown instead.
 
 ### Available API Endpoints
 
@@ -111,6 +135,9 @@ Open http://localhost:5000 in your browser.
 | GET | `/api/news` | Latest news (`?limit=10&sentiment=positive`) |
 | GET | `/api/prices` | Market prices (`?ticker=AAPL`) |
 | GET | `/api/sentiment-trend` | 7-day sentiment data |
+| GET | `/api/sentiment-by-source` | Sentiment breakdown by news source |
+| GET | `/api/sentiment-by-asset` | Sentiment breakdown by ticker |
+| GET | `/api/risk-alerts` | Risk alerts (`?level=high`) |
 | POST | `/api/chat` | AI chat (`{"question": "..."}`) |
 | GET | `/api/status` | Health check |
 
@@ -121,23 +148,34 @@ Open http://localhost:5000 in your browser.
 ```
 Project/
 ├── config/
-│   └── settings.py          # Central config: Kafka, assets, RSS feeds
+│   └── settings.py                # Central config: Kafka, Spark, assets, storage paths
 ├── ingestion/
-│   ├── rss_producer.py      # RSS → Kafka producer
-│   ├── stock_producer.py    # yfinance → Kafka producer
-│   └── consumer_test.py     # Manual Kafka verification consumer
-├── processing/              # Week 2: PySpark cleaning & sentiment jobs
-├── intelligence/            # Week 3: RAG + multi-agent framework
-├── storage/                 # Week 3: Vector DB integration
+│   ├── rss_producer.py            # RSS → Kafka producer
+│   ├── stock_producer.py          # yfinance → Kafka producer
+│   ├── social_producer.py         # Social media → Kafka producer
+│   └── consumer_test.py           # Manual Kafka verification consumer
+├── processing/
+│   ├── spark_session.py           # SparkSession builder
+│   ├── cleaning_pipeline.py       # Text cleaning (HTML, URLs, stopwords, dedup)
+│   ├── sentiment_processor.py     # Spark UDF wrapper for sentiment
+│   ├── spark_sql_analytics.py     # Aggregations: by asset, source, time
+│   ├── stock_analytics.py         # Price metrics: MA, volatility, anomalies
+│   └── batch_pipeline.py          # End-to-end orchestrator
+├── intelligence/
+│   └── sentiment_model.py         # FinBERT + VADER sentiment analysis
+├── storage/
+│   ├── sqlite_writer.py           # SQLite persistence layer
+│   └── json_writer.py             # JSON file I/O for dashboard
 ├── webapp/
-│   ├── app.py               # Flask application
+│   ├── app.py                     # Flask application (reads processed data)
 │   ├── templates/
-│   │   └── index.html       # Bootstrap 5 dashboard
+│   │   └── index.html             # Dashboard with charts & analytics
 │   └── static/
-│       └── style.css        # Custom dark-theme styles
+│       └── style.css              # Custom dark-theme styles
 ├── data/
-│   └── sample/              # Sample JSON/CSV for offline testing
-├── .env                     # Secrets & config (not committed)
+│   ├── sample/
+│   │   └── generate_sample_data.py  # Generates realistic test data
+│   └── processed/                   # Pipeline output (gitignored)
 ├── requirements.txt
 └── README.md
 ```
@@ -149,7 +187,7 @@ Project/
 | Week | Status | Focus |
 |------|--------|-------|
 | Week 1 | ✅ Complete | Environment, Kafka, ingestion producers, Flask skeleton |
-| Week 2 | 🔲 Pending | PySpark cleaning, sentiment analysis, Spark SQL |
+| Week 2 | ✅ Complete | PySpark pipeline, FinBERT/VADER sentiment, Spark SQL analytics, dashboard wiring |
 | Week 3 | 🔲 Pending | Vector DB, RAG, multi-agent AI framework |
 | Week 4 | 🔲 Pending | Full integration, testing, report |
 
@@ -172,9 +210,21 @@ Project/
 
 ---
 
-## Limitations (Week 1)
+## Week 2 Highlights
 
-- Dashboard shows **placeholder data** — live Kafka consumption wired in Week 2.
+- **PySpark batch pipeline** — cleans 55 sample articles (HTML strip, URL removal, stopword removal, deduplication) and computes Spark SQL aggregations.
+- **Sentiment analysis** — FinBERT model with automatic VADER fallback. Produces positive/negative/neutral labels with confidence scores.
+- **Spark SQL analytics** — sentiment by asset (8 tickers), by source (6 feeds), by time (7-day trend), overall distribution, and top movers.
+- **Stock analytics** — 5-bar and 20-bar moving averages, rolling volatility, daily change %, volume anomaly detection.
+- **Dual storage** — results written to both JSON files (`data/processed/`) and SQLite (`data/analytics.db`).
+- **Live dashboard** — Flask routes now read from pipeline output; new stacked bar charts for sentiment by source and by asset; dynamic risk alerts generated from sentiment data.
+
+---
+
+## Limitations (Week 2)
+
+- FinBERT requires PyTorch; on Python 3.14 the CPU torch build may fall back to VADER automatically.
 - Chat endpoint returns a placeholder — RAG integration in Week 3.
 - Social media stream uses simulated data (live API access may require approval).
 - Free stock APIs (yfinance) may return delayed data outside market hours.
+- Kafka streaming integration is Phase 2 — current pipeline runs on sample data.
