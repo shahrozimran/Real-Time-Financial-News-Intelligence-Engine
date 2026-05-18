@@ -58,7 +58,7 @@
     <div class="sys-status">
       <div class="sys-status-item"><div class="status-dot online"></div> Flask Server</div>
       <div class="sys-status-item"><div class="status-dot warn" id="kafka-dot"></div> <span id="kafka-label">Kafka — Start broker</span></div>
-      <div class="sys-status-item"><div class="status-dot offline" id="spark-dot"></div> <span id="spark-label">PySpark — Week 2</span></div>
+      <div class="sys-status-item"><div class="status-dot online" id="spark-dot"></div> <span id="spark-label">PySpark — Ready</span></div>
     </div>
   </div>
 </aside>
@@ -320,7 +320,8 @@
 
     <!-- ════════════════════════ ANALYSIS ════════════════════════ -->
     <section id="sec-analysis" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <!-- Row 1: Trend + Donut -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
         <div class="g-card">
           <div class="g-card-header">
             <div class="header-icon hi-cyan"><i class="bi bi-graph-up"></i></div>
@@ -348,6 +349,30 @@
               <div class="legend-item"><div class="legend-dot" style="background:var(--accent-blue)"></div><span class="l-label">Neutral</span><span class="l-value text-blue" id="leg-neu2">—</span></div>
               <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red)"></div><span class="l-label">Negative</span><span class="l-value text-red" id="leg-neg2">—</span></div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Sentiment by Source + Sentiment by Asset -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-green"><i class="bi bi-broadcast"></i></div>
+            Sentiment by Source
+            <span style="margin-left:auto;font-size:0.68rem;color:var(--text-muted);font-weight:400">FinBERT analysis</span>
+          </div>
+          <div class="g-card-body chart-container" style="height:280px">
+            <canvas id="sourceChart"></canvas>
+          </div>
+        </div>
+        <div class="g-card">
+          <div class="g-card-header">
+            <div class="header-icon hi-yellow"><i class="bi bi-currency-exchange"></i></div>
+            Sentiment by Asset
+            <span style="margin-left:auto;font-size:0.68rem;color:var(--text-muted);font-weight:400">Across all sources</span>
+          </div>
+          <div class="g-card-body chart-container" style="height:280px">
+            <canvas id="assetChart"></canvas>
           </div>
         </div>
       </div>
@@ -411,7 +436,7 @@
 // ── Shared state ──────────────────────────────────────────────────
 let pricesData = {};
 let sentimentTrend = [];
-let donutChart1 = null, donutChart2 = null, trendChart1 = null, trendChart2 = null;
+let donutChart1 = null, donutChart2 = null, trendChart1 = null, trendChart2 = null, sourceChart = null, assetChart = null;
 let currentNewsFilter = '';
 
 const SECTION_TITLES = {
@@ -601,7 +626,7 @@ async function loadSentimentCharts() {
   setDonutKPIs(sentimentTrend, '');
 }
 
-function initAnalysisCharts() {
+async function initAnalysisCharts() {
   if (!sentimentTrend.length) return;
   const latest = sentimentTrend[sentimentTrend.length - 1];
   const ctx2 = document.getElementById('sentimentChart2');
@@ -610,6 +635,70 @@ function initAnalysisCharts() {
   }
   if (!donutChart2) donutChart2 = buildDonut('donutChart2', latest.positive);
   setDonutKPIs(sentimentTrend, '2');
+
+  // Sentiment by Source chart
+  if (!sourceChart) {
+    try {
+      const resp = await fetch('/api/sentiment-by-source');
+      const data = await resp.json();
+      if (data.length) {
+        const ctx = document.getElementById('sourceChart');
+        if (ctx) {
+          sourceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: data.map(d => d.source),
+              datasets: [
+                { label:'Positive', data: data.map(d=>d.positive), backgroundColor:'rgba(16,185,129,0.75)', borderRadius:4 },
+                { label:'Neutral',  data: data.map(d=>d.neutral),  backgroundColor:'rgba(59,130,246,0.75)',  borderRadius:4 },
+                { label:'Negative', data: data.map(d=>d.negative), backgroundColor:'rgba(239,68,68,0.75)',   borderRadius:4 },
+              ]
+            },
+            options: {
+              ...CHART_DEFAULTS,
+              scales: {
+                ...CHART_DEFAULTS.scales,
+                x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+                y: { ...CHART_DEFAULTS.scales.y, stacked: true, max: undefined },
+              },
+            }
+          });
+        }
+      }
+    } catch(e) { console.warn('Source chart failed:', e); }
+  }
+
+  // Sentiment by Asset chart
+  if (!assetChart) {
+    try {
+      const resp = await fetch('/api/sentiment-by-asset');
+      const data = await resp.json();
+      if (data.length) {
+        const ctx = document.getElementById('assetChart');
+        if (ctx) {
+          assetChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: data.map(d => d.ticker),
+              datasets: [
+                { label:'Positive', data: data.map(d=>d.positive), backgroundColor:'rgba(16,185,129,0.75)', borderRadius:4 },
+                { label:'Neutral',  data: data.map(d=>d.neutral),  backgroundColor:'rgba(59,130,246,0.75)',  borderRadius:4 },
+                { label:'Negative', data: data.map(d=>d.negative), backgroundColor:'rgba(239,68,68,0.75)',   borderRadius:4 },
+              ]
+            },
+            options: {
+              ...CHART_DEFAULTS,
+              scales: {
+                ...CHART_DEFAULTS.scales,
+                x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+                y: { ...CHART_DEFAULTS.scales.y, stacked: true, max: undefined },
+              },
+            }
+          });
+        }
+      }
+    } catch(e) { console.warn('Asset chart failed:', e); }
+  }
 }
 
 // ── Risk Alerts ───────────────────────────────────────────────────

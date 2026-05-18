@@ -26,7 +26,15 @@ data/sample/*.csv
 # Jupyter
 .ipynb_checkpoints/
 
+# Processed data output
+data/processed/
+data/analytics.db
+
 # PySpark
 spark-warehouse/
 derby.log
 metastore_db/
+
+# Model cache
+.cache/
+huggingface/

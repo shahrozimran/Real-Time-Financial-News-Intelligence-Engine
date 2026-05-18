@@ -5,22 +5,33 @@
 # ============================================================
 
 # Data ingestion & streaming
-kafka-python==2.0.2
-feedparser==6.0.11
-yfinance==0.2.38
+kafka-python-ng>=2.2.2
+feedparser>=6.0.11
+yfinance>=0.2.38
 
 # Web framework
-flask==3.0.3
+flask>=3.0.3
 
 # Data handling
-pandas==2.2.2
-requests==2.31.0
+pandas>=2.2.2
+requests>=2.31.0
 
 # Environment / config
-python-dotenv==1.0.1
+python-dotenv>=1.0.1
 
-# ── Week 2 (install now to verify compatibility) ──────────────
-pyspark==3.5.1
+# ── Week 2: PySpark + NLP + Sentiment ─────────────────────────
+pyspark>=3.5.1
+
+# NLP / Sentiment
+transformers>=4.40.0
+torch>=2.2.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+vaderSentiment>=3.3.2
+nltk>=3.8.1
+
+# Text cleaning
+beautifulsoup4>=4.12.3
+lxml>=5.2.2
 
 # ── Week 3 (uncomment when needed) ───────────────────────────
 # chromadb==0.5.3

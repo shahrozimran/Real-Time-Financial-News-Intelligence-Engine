@@ -13,6 +13,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
+import pandas as pd
 import yfinance as yf
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
@@ -65,6 +66,10 @@ def fetch_latest_bar(ticker: str) -> dict | None:
         if df.empty:
             logger.warning("No data returned for %s", ticker)
             return None
+
+        # Flatten multi-level columns (yfinance >= 0.2.38 returns MultiIndex)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
 
         row = df.iloc[-1]
         bar_time = str(df.index[-1])
