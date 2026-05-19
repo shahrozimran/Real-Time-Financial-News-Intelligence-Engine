@@ -301,10 +301,63 @@ def upsert_sentiment_aggregates(aggregates: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Social posts upsert
+# ---------------------------------------------------------------------------
+
+def _social_text(p: dict) -> str:
+    """Convert social post dict to embedding text."""
+    return (
+        f"{p.get('platform', 'Social')} — {p.get('ticker', 'UNKNOWN')}: "
+        f"{p.get('text', '')} "
+        f"Sentiment: {p.get('sentiment', 'neutral')} "
+        f"(score: {float(p.get('sentiment_score', 0)):.3f}). "
+        f"Mentions: {p.get('mentions', 0)}, Upvotes: {p.get('upvotes', 0)}."
+    )
+
+
+def upsert_social_posts(posts: list) -> int:
+    """Embed and upsert social media posts into Pinecone namespace 'social'."""
+    if not posts:
+        logger.warning("No social posts to upsert.")
+        return 0
+
+    import hashlib as _hashlib
+    index = _get_index()
+    texts = [_social_text(p) for p in posts]
+    embeddings = _embed_texts(texts)
+
+    vectors = []
+    for p, emb, text in zip(posts, embeddings, texts):
+        doc_id = p.get("id") or _hashlib.sha256(
+            f"{p.get('platform', '')}-{p.get('ticker', '')}-{p.get('timestamp', '')}".encode()
+        ).hexdigest()[:32]
+        vectors.append({
+            "id":     doc_id,
+            "values": emb,
+            "metadata": {
+                "text":            text[:500],
+                "platform":        str(p.get("platform", "")),
+                "ticker":          str(p.get("ticker", "")),
+                "sentiment":       str(p.get("sentiment", "neutral")),
+                "sentiment_score": float(p.get("sentiment_score", 0.0)),
+                "mentions":        int(p.get("mentions", 0)),
+                "upvotes":         int(p.get("upvotes", 0)),
+                "rank":            int(p.get("rank", 0)),
+                "timestamp":       str(p.get("timestamp", "")),
+            },
+        })
+
+    count = _upsert_batch(index, vectors, namespace="social")
+    logger.info("Pinecone: upserted %d social posts", count)
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Master upsert (called by batch_pipeline)
 # ---------------------------------------------------------------------------
 
-def upsert_all(articles: list, price_bars: list, aggregates: dict) -> dict:
+def upsert_all(articles: list, price_bars: list, aggregates: dict,
+               social_posts: list = None) -> dict:
     """
     Embed and upsert all data types to Pinecone.
     Returns dict with counts per namespace.
@@ -329,6 +382,13 @@ def upsert_all(articles: list, price_bars: list, aggregates: dict) -> dict:
     except Exception as exc:
         logger.error("Sentiment upsert failed: %s", exc)
         results["sentiment"] = 0
+
+    if social_posts:
+        try:
+            results["social"] = upsert_social_posts(social_posts)
+        except Exception as exc:
+            logger.error("Social posts upsert failed: %s", exc)
+            results["social"] = 0
 
     total = sum(results.values())
     logger.info("Pinecone upsert complete: %s (total=%d vectors)", results, total)

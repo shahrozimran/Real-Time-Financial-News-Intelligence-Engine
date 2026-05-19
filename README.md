@@ -155,12 +155,13 @@ Project/
 │   ├── social_producer.py         # Social media → Kafka producer
 │   └── consumer_test.py           # Manual Kafka verification consumer
 ├── processing/
-│   ├── spark_session.py           # SparkSession builder
-│   ├── cleaning_pipeline.py       # Text cleaning (HTML, URLs, stopwords, dedup)
-│   ├── sentiment_processor.py     # Spark UDF wrapper for sentiment
-│   ├── spark_sql_analytics.py     # Aggregations: by asset, source, time
-│   ├── stock_analytics.py         # Price metrics: MA, volatility, anomalies
-│   └── batch_pipeline.py          # End-to-end orchestrator
+│   ├── spark_session.py         # SparkSession factory (batch + streaming modes)
+│   ├── cleaning_pipeline.py     # HTML strip, URL remove, stopwords, dedup
+│   ├── sentiment_processor.py   # FinBERT Spark UDF wrapper (used by streaming pipeline)
+│   ├── spark_sql_analytics.py   # Aggregations by asset/source/time
+│   ├── stock_analytics.py       # MA, volatility, volume anomaly
+│   ├── batch_pipeline.py        # Batch orchestrator: load→clean→sentiment→social→store
+│   └── streaming_pipeline.py    # PySpark Structured Streaming: Kafka→clean→sentiment→store
 ├── intelligence/
 │   └── sentiment_model.py         # FinBERT + VADER sentiment analysis
 ├── storage/
@@ -186,10 +187,10 @@ Project/
 
 | Week | Status | Focus |
 |------|--------|-------|
-| Week 1 | ✅ Complete | Environment, Kafka, ingestion producers, Flask skeleton |
-| Week 2 | ✅ Complete | PySpark pipeline, FinBERT/VADER sentiment, Spark SQL analytics, dashboard wiring |
-| Week 3 | 🔲 Pending | Vector DB, RAG, multi-agent AI framework |
-| Week 4 | 🔲 Pending | Full integration, testing, report |
+| Week 1 | ✅ Complete | Environment, Kafka, ingestion producers (news/stock/social), Flask skeleton |
+| Week 2 | ✅ Complete | PySpark batch pipeline, FinBERT/VADER sentiment, Spark SQL analytics, dashboard wiring |
+| Week 3 | ✅ Complete | Pinecone vector DB (3 namespaces), RAG retriever, LangGraph multi-agent AI framework |
+| Week 4 | ✅ Complete | PySpark Structured Streaming, social sentiment pipeline, full integration, live data throughout |
 
 ---
 

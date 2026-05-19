@@ -29,7 +29,9 @@ def _strip_html(text: str) -> str:
     if not text:
         return ""
     try:
-        from bs4 import BeautifulSoup
+        import warnings
+        from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+        warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
         return BeautifulSoup(text, "html.parser").get_text(separator=" ")
     except Exception:
         return re.sub(r"<[^>]+>", " ", text)

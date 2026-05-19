@@ -94,10 +94,26 @@ def init_tables():
                 updated_at TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS social_posts (
+                id TEXT PRIMARY KEY,
+                platform TEXT,
+                ticker TEXT,
+                text TEXT,
+                sentiment TEXT,
+                sentiment_score REAL,
+                mentions INTEGER DEFAULT 0,
+                upvotes INTEGER DEFAULT 0,
+                rank INTEGER DEFAULT 0,
+                timestamp TEXT,
+                processed_at TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_articles_sentiment ON articles(sentiment);
             CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
             CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published);
             CREATE INDEX IF NOT EXISTS idx_price_bars_ticker ON price_bars(ticker);
+            CREATE INDEX IF NOT EXISTS idx_social_ticker ON social_posts(ticker);
+            CREATE INDEX IF NOT EXISTS idx_social_sentiment ON social_posts(sentiment);
         """)
         conn.commit()
         logger.info("SQLite tables initialised at %s", SQLITE_DB_PATH)
@@ -224,6 +240,39 @@ def upsert_price_snapshot(snapshot: dict):
         conn.close()
 
 
+def upsert_social_posts(posts: list):
+    """Insert or update social media posts with sentiment."""
+    if not posts:
+        return
+    conn = _get_connection()
+    try:
+        conn.executemany(
+            """INSERT OR REPLACE INTO social_posts
+               (id, platform, ticker, text, sentiment, sentiment_score,
+                mentions, upvotes, rank, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    p["id"],
+                    p.get("platform", ""),
+                    p.get("ticker", ""),
+                    p.get("text", ""),
+                    p.get("sentiment", "neutral"),
+                    float(p.get("sentiment_score", 0.0)),
+                    int(p.get("mentions", 0)),
+                    int(p.get("upvotes", 0)),
+                    int(p.get("rank", 0)),
+                    p.get("timestamp", ""),
+                )
+                for p in posts
+            ],
+        )
+        conn.commit()
+        logger.info("Upserted %d social posts to SQLite", len(posts))
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Query helpers (used by Flask routes)
 # ---------------------------------------------------------------------------
@@ -269,6 +318,26 @@ def query_sentiment_by_asset() -> list:
                WHERE agg_type = 'by_asset'
                ORDER BY total DESC"""
         ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def query_social_posts(limit: int = 50, ticker: str = None, sentiment: str = None) -> list:
+    """Query social posts from SQLite."""
+    conn = _get_connection()
+    try:
+        query = "SELECT * FROM social_posts WHERE 1=1"
+        params = []
+        if ticker:
+            query += " AND ticker = ?"
+            params.append(ticker.upper())
+        if sentiment:
+            query += " AND sentiment = ?"
+            params.append(sentiment)
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

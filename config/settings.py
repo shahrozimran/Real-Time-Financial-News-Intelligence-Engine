@@ -114,9 +114,18 @@ SQLITE_DB_PATH = os.path.join(DATA_DIR, "analytics.db")
 # ---------------------------------------------------------------------------
 # PySpark Settings
 # ---------------------------------------------------------------------------
-SPARK_APP_NAME   = "FinIntel-Pipeline"
-SPARK_MASTER     = os.getenv("SPARK_MASTER", "local[*]")
-SPARK_LOG_LEVEL  = os.getenv("SPARK_LOG_LEVEL", "WARN")
+SPARK_APP_NAME      = "FinIntel-Pipeline"
+SPARK_MASTER        = os.getenv("SPARK_MASTER", "local[*]")
+SPARK_LOG_LEVEL     = os.getenv("SPARK_LOG_LEVEL", "WARN")
+SPARK_KAFKA_PACKAGES = os.getenv(
+    "SPARK_KAFKA_PACKAGES",
+    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1",
+)
+STREAMING_CHECKPOINT_DIR = os.getenv(
+    "STREAMING_CHECKPOINT_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "checkpoints"),
+)
+STREAMING_TRIGGER_SECONDS = int(os.getenv("STREAMING_TRIGGER_SECONDS", "30"))
 
 # ---------------------------------------------------------------------------
 # Sentiment Model Settings

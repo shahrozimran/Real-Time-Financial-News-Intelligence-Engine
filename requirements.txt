@@ -1,21 +1,20 @@
 # ============================================================
 # Real-Time Financial News Intelligence Engine
-# Python dependencies — Week 1
+# All Python dependencies (Weeks 1–4)
 # Install: pip install -r requirements.txt
 # ============================================================
 
-# Data ingestion & streaming
+# ── Week 1: Data Ingestion & Web Framework ────────────────────
 kafka-python-ng>=2.2.2
 
-# Live API data sources (Finnhub, Alpha Vantage, Tradestie)
-# No extra packages needed — uses 'requests' (listed below)
+# Live API data sources (Finnhub, Alpha Vantage, ApeWisdom)
+requests>=2.31.0
 
 # Web framework
 flask>=3.0.3
 
 # Data handling
 pandas>=2.2.2
-requests>=2.31.0
 
 # Environment / config
 python-dotenv>=1.0.1
@@ -34,11 +33,10 @@ nltk>=3.8.1
 beautifulsoup4>=4.12.3
 lxml>=5.2.2
 
-# ── Week 3: Pinecone Vector DB + RAG + LangGraph Multi-Agent ─
-pinecone-client>=3.2.0
+# ── Week 3: Pinecone Vector DB + RAG + LangGraph Multi-Agent ──
+pinecone>=3.2.0
 openai>=1.30.0
 langchain>=0.2.0
 langchain-openai>=0.1.0
-langchain-pinecone>=0.1.0
 langchain-core>=0.2.0
 langgraph>=0.1.0

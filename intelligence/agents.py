@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL,
+    ALL_TICKERS, ASSETS,
 )
 from intelligence.rag_retriever import Document
 
@@ -72,13 +73,13 @@ def _get_llm():
 # ---------------------------------------------------------------------------
 
 def _detect_tickers(question: str) -> list[str]:
-    """Detect likely ticker symbols in the question."""
-    known = {
-        "AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "NVDA",
-        "BTC", "ETH", "BTC-USD", "ETH-USD",
-        "GSPC", "IXIC", "S&P", "NASDAQ",
-    }
-    words = re.findall(r"\b[A-Z]{1,6}\b", question.upper())
+    """Detect likely ticker symbols in the question using configured asset lists."""
+    known = set()
+    for ticker in ALL_TICKERS:
+        known.add(ticker.upper())
+        known.add(ticker.replace("-USD", "").replace("^", "").upper())
+    known.update({"S&P", "NASDAQ", "SP500"})
+    words = re.findall(r"\b[A-Z0-9^][A-Z0-9]{0,5}\b", question.upper())
     found = [w for w in words if w in known]
     return list(set(found))
 

@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from flask import Flask, render_template, jsonify, request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.settings import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, ALL_TICKERS, ASSETS
+from config.settings import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, ALL_TICKERS, ASSETS, TOPICS
 
 app = Flask(__name__)
 
@@ -449,15 +449,49 @@ def api_rag_search():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/social")
+def api_social():
+    """
+    Return stored social media sentiment posts from SQLite.
+    Query params:
+        ticker    (str, optional)
+        sentiment (positive|negative|neutral, optional)
+        limit     (int, default 50)
+    Falls back to live ApeWisdom fetch if SQLite has no data.
+    """
+    ticker    = request.args.get("ticker", "").upper() or None
+    sentiment = request.args.get("sentiment")
+    limit     = int(request.args.get("limit", 50))
+
+    try:
+        from storage.sqlite_writer import query_social_posts
+        posts = query_social_posts(limit=limit, ticker=ticker, sentiment=sentiment)
+        if posts:
+            return jsonify({"count": len(posts), "source": "sqlite", "posts": posts})
+    except Exception:
+        pass
+
+    try:
+        from ingestion.live_data_fetcher import fetch_all_social_sentiment
+        posts = fetch_all_social_sentiment()
+        if ticker:
+            posts = [p for p in posts if p.get("ticker", "").upper() == ticker]
+        if sentiment:
+            posts = [p for p in posts if p.get("sentiment") == sentiment]
+        return jsonify({"count": len(posts[:limit]), "source": "live", "posts": posts[:limit]})
+    except Exception as exc:
+        return jsonify({"error": str(exc), "posts": []}), 500
+
+
 @app.route("/api/status")
 def api_status():
     """Health-check endpoint."""
     return jsonify({
         "status":    "ok",
-        "version":   "week3",
+        "version":   "week4",
         "pipeline_data": _has_processed_data(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "topics":    ["news-feed", "social-posts", "stock-prices"],
+        "topics":    list(TOPICS.values()),
         "tickers":   ALL_TICKERS,
     })
 
