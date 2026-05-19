@@ -6,8 +6,9 @@
 
 # Data ingestion & streaming
 kafka-python-ng>=2.2.2
-feedparser>=6.0.11
-yfinance>=0.2.38
+
+# Live API data sources (Finnhub, Alpha Vantage, Tradestie)
+# No extra packages needed — uses 'requests' (listed below)
 
 # Web framework
 flask>=3.0.3

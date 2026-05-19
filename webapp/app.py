@@ -30,7 +30,7 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 
 def _load_processed_articles():
-    """Load articles from processed JSON or SQLite, fallback to placeholder."""
+    """Load articles from processed JSON, fallback to live Finnhub API."""
     try:
         from storage.json_writer import read_articles
         articles = read_articles()
@@ -38,11 +38,16 @@ def _load_processed_articles():
             return articles
     except Exception:
         pass
-    return PLACEHOLDER_NEWS
+    # Fallback: fetch live from Finnhub
+    try:
+        from ingestion.live_data_fetcher import fetch_all_news
+        return fetch_all_news(days_back=3)
+    except Exception:
+        return []
 
 
 def _load_processed_prices():
-    """Load prices from processed JSON, fallback to placeholder."""
+    """Load prices from processed JSON, fallback to live Finnhub/Alpha Vantage."""
     try:
         from storage.json_writer import read_prices
         prices = read_prices()
@@ -50,7 +55,12 @@ def _load_processed_prices():
             return prices
     except Exception:
         pass
-    return PLACEHOLDER_PRICES
+    # Fallback: fetch live from Finnhub + Alpha Vantage
+    try:
+        from ingestion.live_data_fetcher import fetch_all_prices_as_snapshot
+        return fetch_all_prices_as_snapshot()
+    except Exception:
+        return {}
 
 
 def _load_processed_aggregates():
@@ -71,94 +81,6 @@ def _has_processed_data():
         return False
 
 
-# ---------------------------------------------------------------------------
-# Placeholder data (used when pipeline hasn't run yet)
-# ---------------------------------------------------------------------------
-PLACEHOLDER_NEWS = [
-    {
-        "id": "n001", "source": "Reuters Business",
-        "title": "Fed signals possible rate hold amid strong jobs data",
-        "summary": "Federal Reserve officials indicated they may hold interest rates steady as the labour market remains resilient despite inflation pressures.",
-        "url": "https://reuters.com/placeholder", "published": "2025-05-11T08:30:00+00:00", "sentiment": "neutral",
-    },
-    {
-        "id": "n002", "source": "CNBC Top News",
-        "title": "NVIDIA shares surge after record quarterly earnings beat",
-        "summary": "NVIDIA Corporation reported quarterly revenue well above analyst estimates, driven by surging demand for AI accelerator chips across data centres.",
-        "url": "https://cnbc.com/placeholder", "published": "2025-05-11T07:15:00+00:00", "sentiment": "positive",
-    },
-    {
-        "id": "n003", "source": "MarketWatch",
-        "title": "Tesla faces renewed regulatory scrutiny in Europe",
-        "summary": "European regulators announced an investigation into Tesla's Autopilot system following a series of accidents on German autobahns.",
-        "url": "https://marketwatch.com/placeholder", "published": "2025-05-11T06:00:00+00:00", "sentiment": "negative",
-    },
-    {
-        "id": "n004", "source": "Yahoo Finance",
-        "title": "Apple unveils new AI-powered developer tools at WWDC",
-        "summary": "Apple's annual developer conference showcased deep on-device AI integration, positioning the company to compete directly with Google and Microsoft.",
-        "url": "https://finance.yahoo.com/placeholder", "published": "2025-05-11T05:45:00+00:00", "sentiment": "positive",
-    },
-    {
-        "id": "n005", "source": "Seeking Alpha",
-        "title": "Bitcoin breaks $63K resistance — analysts eye $70K next",
-        "summary": "Bitcoin cleared a key technical resistance level overnight, with on-chain data showing large wallet accumulation and a sharp drop in exchange outflows.",
-        "url": "https://seekingalpha.com/placeholder", "published": "2025-05-11T04:20:00+00:00", "sentiment": "positive",
-    },
-    {
-        "id": "n006", "source": "Investing.com",
-        "title": "Amazon logistics costs weigh on Q1 operating margin",
-        "summary": "Amazon's first-quarter results showed AWS revenue growth but higher-than-expected fulfilment costs compressed margins in the North America retail segment.",
-        "url": "https://investing.com/placeholder", "published": "2025-05-11T03:10:00+00:00", "sentiment": "negative",
-    },
-    {
-        "id": "n007", "source": "Reuters Business",
-        "title": "S&P 500 posts third consecutive weekly gain on tech rally",
-        "summary": "The index advanced 0.9% for the week, led by semiconductor and AI-linked stocks, as investors rotated back into growth names on cooling Treasury yields.",
-        "url": "https://reuters.com/placeholder2", "published": "2025-05-11T02:00:00+00:00", "sentiment": "positive",
-    },
-    {
-        "id": "n008", "source": "CNBC Top News",
-        "title": "Microsoft Azure outage disrupts enterprise customers across EMEA",
-        "summary": "A multi-hour Azure cloud outage affected thousands of enterprise customers in Europe and the Middle East, raising reliability concerns among institutional investors.",
-        "url": "https://cnbc.com/placeholder2", "published": "2025-05-11T01:30:00+00:00", "sentiment": "negative",
-    },
-    {
-        "id": "n009", "source": "MarketWatch",
-        "title": "Ethereum ETF net inflows hit monthly record",
-        "summary": "Spot Ethereum ETFs recorded their highest single-month net inflow since approval, with BlackRock and Fidelity products leading the tally.",
-        "url": "https://marketwatch.com/placeholder2", "published": "2025-05-10T22:45:00+00:00", "sentiment": "positive",
-    },
-    {
-        "id": "n010", "source": "Seeking Alpha",
-        "title": "Alphabet ad revenue growth slows amid AI search disruption fears",
-        "summary": "Google's parent company beat earnings but guidance disappointed as analysts flagged structural risk from AI-powered search alternatives eroding core ad click volume.",
-        "url": "https://seekingalpha.com/placeholder2", "published": "2025-05-10T20:00:00+00:00", "sentiment": "neutral",
-    },
-]
-
-PLACEHOLDER_PRICES = {
-    "AAPL":    {"close": 189.75, "change_pct": 0.42,  "volume": 52_340_000},
-    "TSLA":    {"close": 172.30, "change_pct": -1.12, "volume": 89_120_000},
-    "MSFT":    {"close": 415.20, "change_pct": 0.68,  "volume": 23_540_000},
-    "GOOGL":   {"close": 175.10, "change_pct": 0.25,  "volume": 19_800_000},
-    "AMZN":    {"close": 194.80, "change_pct": -0.33, "volume": 31_250_000},
-    "NVDA":    {"close": 924.60, "change_pct": 3.21,  "volume": 44_100_000},
-    "^GSPC":   {"close": 5309.50,"change_pct": 0.15,  "volume": 0},
-    "^IXIC":   {"close": 16780.20,"change_pct": 0.30, "volume": 0},
-    "BTC-USD": {"close": 62_400.00,"change_pct": 1.05,"volume": 0},
-    "ETH-USD": {"close": 3_020.00, "change_pct": 0.80,"volume": 0},
-}
-
-PLACEHOLDER_SENTIMENT_TREND = [
-    {"date": "2025-05-05", "positive": 42, "neutral": 31, "negative": 27},
-    {"date": "2025-05-06", "positive": 38, "neutral": 35, "negative": 27},
-    {"date": "2025-05-07", "positive": 45, "neutral": 29, "negative": 26},
-    {"date": "2025-05-08", "positive": 50, "neutral": 28, "negative": 22},
-    {"date": "2025-05-09", "positive": 44, "neutral": 33, "negative": 23},
-    {"date": "2025-05-10", "positive": 39, "neutral": 30, "negative": 31},
-    {"date": "2025-05-11", "positive": 47, "neutral": 28, "negative": 25},
-]
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -220,9 +142,7 @@ def api_sentiment_trend():
     """Return 7-day sentiment trend data for Chart.js."""
     aggregates = _load_processed_aggregates()
     trend = aggregates.get("by_time", [])
-    if trend:
-        return jsonify(trend)
-    return jsonify(PLACEHOLDER_SENTIMENT_TREND)
+    return jsonify(trend)
 
 
 @app.route("/api/sentiment-by-source")
@@ -292,7 +212,7 @@ def _generate_risk_alerts():
     prices = _load_processed_prices()
 
     if not articles or not _has_processed_data():
-        return PLACEHOLDER_RISK_ALERTS
+        return []
 
     alerts = []
     alert_id = 1
@@ -346,19 +266,139 @@ def _generate_risk_alerts():
             })
             alert_id += 1
 
-    if not alerts:
-        return PLACEHOLDER_RISK_ALERTS
-
     return alerts
 
 
-PLACEHOLDER_RISK_ALERTS = [
-    {"id": "r001", "level": "high",   "ticker": "TSLA",    "signal": "Negative sentiment spike",  "detail": "85% negative coverage in last 2 hours across 14 sources.",      "time": "10 min ago"},
-    {"id": "r002", "level": "high",   "ticker": "AMZN",    "signal": "Earnings miss detected",    "detail": "Operating margin below consensus — 3 analyst downgrades filed.",   "time": "32 min ago"},
-    {"id": "r003", "level": "medium", "ticker": "MSFT",    "signal": "Cloud outage reported",      "detail": "Azure EMEA outage may impact short-term revenue recognition.",       "time": "1 hr ago"},
-    {"id": "r004", "level": "medium", "ticker": "BTC-USD", "signal": "Volatility alert",           "detail": "30-day realised volatility exceeded 60% threshold.",               "time": "2 hr ago"},
-    {"id": "r005", "level": "low",    "ticker": "GOOGL",   "signal": "Guidance below estimate",   "detail": "Q2 guidance 2.1% below consensus — watch ad revenue trend.",       "time": "3 hr ago"},
-]
+@app.route("/api/live-prices")
+def api_live_prices():
+    """Fetch prices directly from Finnhub + Alpha Vantage (bypasses pipeline)."""
+    try:
+        from ingestion.live_data_fetcher import fetch_all_prices_as_snapshot
+        snapshot = fetch_all_prices_as_snapshot()
+        return jsonify(snapshot)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/live-news")
+def api_live_news():
+    """Fetch news directly from Finnhub (bypasses pipeline)."""
+    limit = int(request.args.get("limit", 20))
+    try:
+        from ingestion.live_data_fetcher import fetch_all_news
+        articles = fetch_all_news(days_back=3)
+        return jsonify({"count": len(articles[:limit]), "articles": articles[:limit]})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/social-sentiment")
+def api_social_sentiment():
+    """Fetch social sentiment from Tradestie (Reddit + StockTwits)."""
+    try:
+        from ingestion.live_data_fetcher import fetch_all_social_sentiment
+        posts = fetch_all_social_sentiment()
+        return jsonify({"count": len(posts), "posts": posts})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/search")
+def api_search():
+    """Search for stock symbols via Finnhub."""
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify([])
+    try:
+        from ingestion.live_data_fetcher import search_symbols
+        results = search_symbols(query)
+        return jsonify(results)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stock/<symbol>")
+def api_stock_detail(symbol):
+    """Fetch combined quote + company profile + financials for a symbol."""
+    symbol = symbol.upper()
+    try:
+        from ingestion.live_data_fetcher import (
+            fetch_finnhub_quote, fetch_company_profile, fetch_company_financials,
+        )
+        quote = fetch_finnhub_quote(symbol) or {}
+        profile = fetch_company_profile(symbol) or {}
+        financials = fetch_company_financials(symbol) or {}
+        return jsonify({
+            "quote": quote,
+            "profile": profile,
+            "financials": financials,
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stock/<symbol>/candles")
+def api_stock_candles(symbol):
+    """Fetch OHLCV candle data for charting."""
+    symbol = symbol.upper()
+    resolution = request.args.get("resolution", "D")
+    from_ts = int(request.args.get("from", 0))
+    to_ts = int(request.args.get("to", 0))
+    try:
+        from ingestion.live_data_fetcher import fetch_stock_candles
+        data = fetch_stock_candles(symbol, resolution, from_ts, to_ts)
+        if not data:
+            return jsonify({"error": "No candle data available"}), 404
+        return jsonify(data)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stock/<symbol>/news")
+def api_stock_news(symbol):
+    """Fetch recent company news for a specific ticker."""
+    symbol = symbol.upper()
+    limit = int(request.args.get("limit", 15))
+    try:
+        from ingestion.live_data_fetcher import fetch_finnhub_company_news
+        articles = fetch_finnhub_company_news(symbol, days_back=7)
+        return jsonify({"count": len(articles[:limit]), "articles": articles[:limit]})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stock/<symbol>/peers")
+def api_stock_peers(symbol):
+    """Fetch peer tickers with their quotes."""
+    symbol = symbol.upper()
+    try:
+        from ingestion.live_data_fetcher import fetch_stock_peers, fetch_finnhub_quote
+        import time as _time
+        peers = fetch_stock_peers(symbol)
+        peer_data = []
+        for p in peers[:6]:
+            q = fetch_finnhub_quote(p)
+            if q:
+                peer_data.append(q)
+            _time.sleep(0.3)
+        return jsonify(peer_data)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/stock/<symbol>/social")
+def api_stock_social(symbol):
+    """Fetch Reddit social sentiment for a specific ticker."""
+    symbol = symbol.upper()
+    try:
+        from ingestion.live_data_fetcher import fetch_apewisdom_stocks
+        posts = fetch_apewisdom_stocks()
+        match = [p for p in posts if p.get("ticker", "").upper() == symbol]
+        if match:
+            return jsonify(match[0])
+        return jsonify({"ticker": symbol, "mentions": 0, "rank": None, "sentiment_hint": "unknown"})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/status")

@@ -15,6 +15,26 @@ TOPICS = {
 }
 
 # ---------------------------------------------------------------------------
+# API Keys (from .env)
+# ---------------------------------------------------------------------------
+FINNHUB_API_KEY       = os.getenv("FINNHUB_API_KEY", "")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# API Base URLs
+# ---------------------------------------------------------------------------
+FINNHUB_BASE_URL       = "https://finnhub.io/api/v1"
+ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
+APEWISDOM_BASE_URL     = "https://apewisdom.io/api/v1.0"  # Reddit sentiment (free, no key)
+
+# ---------------------------------------------------------------------------
+# Rate-Limit Settings
+# ---------------------------------------------------------------------------
+FINNHUB_MAX_CALLS_PER_MIN      = 60   # free tier
+ALPHA_VANTAGE_MAX_CALLS_PER_DAY = 25   # free tier
+ALPHA_VANTAGE_CALL_DELAY_SEC    = 12   # ~5 calls/min safety margin
+
+# ---------------------------------------------------------------------------
 # Financial Assets
 # ---------------------------------------------------------------------------
 ASSETS = {
@@ -26,27 +46,28 @@ ASSETS = {
 # Flat list used by stock producer
 ALL_TICKERS = ASSETS["stocks"] + ASSETS["indices"] + ASSETS["crypto"]
 
+# Separate lists for API routing
+FINNHUB_TICKERS   = ASSETS["stocks"]                  # Finnhub handles normal stocks
+ALPHA_CRYPTO      = ASSETS["crypto"]                   # Alpha Vantage for crypto
+ALPHA_INDICES     = ASSETS["indices"]                   # Alpha Vantage for indices
+
+# Crypto symbol mapping (project format → Alpha Vantage format)
+CRYPTO_SYMBOL_MAP = {"BTC-USD": ("BTC", "USD"), "ETH-USD": ("ETH", "USD")}
+# Index symbol mapping (project format → Alpha Vantage symbol)
+INDEX_SYMBOL_MAP  = {"^GSPC": "SPY", "^IXIC": "QQQ"}  # ETF proxies
+
 # ---------------------------------------------------------------------------
-# RSS Feed Sources
+# Finnhub News Categories
 # ---------------------------------------------------------------------------
-RSS_FEEDS = [
-    {"name": "Reuters Business",  "url": "https://feeds.reuters.com/reuters/businessNews"},
-    {"name": "Yahoo Finance",     "url": "https://finance.yahoo.com/news/rssindex"},
-    {"name": "CNBC Top News",     "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html"},
-    {"name": "MarketWatch",       "url": "https://feeds.marketwatch.com/marketwatch/topstories/"},
-    {"name": "Seeking Alpha",     "url": "https://seekingalpha.com/feed.xml"},
-    {"name": "Investing.com",     "url": "https://www.investing.com/rss/news.rss"},
-]
+FINNHUB_NEWS_CATEGORIES = ["general", "forex", "crypto", "merger"]
 
 # ---------------------------------------------------------------------------
 # Producer / Polling Settings
 # ---------------------------------------------------------------------------
-RSS_POLL_INTERVAL_SECONDS   = 60   # how often to re-fetch RSS feeds
-STOCK_POLL_INTERVAL_SECONDS = 60   # how often to fetch latest price bar
-
-# yfinance fetch window for stock producer
-YFINANCE_PERIOD   = "1d"
-YFINANCE_INTERVAL = "1m"
+NEWS_POLL_INTERVAL_SECONDS   = 60   # how often to fetch Finnhub news
+STOCK_POLL_INTERVAL_SECONDS  = 60   # how often to fetch stock quotes
+CRYPTO_POLL_INTERVAL_SECONDS = 1800 # 30 min — saves Alpha Vantage quota
+SOCIAL_POLL_INTERVAL_SECONDS = 60   # how often to fetch Tradestie data
 
 # ---------------------------------------------------------------------------
 # Flask Settings

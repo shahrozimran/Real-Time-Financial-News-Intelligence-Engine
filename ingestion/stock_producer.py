@@ -1,8 +1,14 @@
 """
 stock_producer.py
 -----------------
-Fetches the latest price bar for each configured ticker using yfinance and
-publishes it as a JSON message to the Kafka 'stock-prices' topic.
+Fetches live stock quotes from Finnhub (stocks) and Alpha Vantage
+(crypto + index ETF proxies) and publishes them as JSON messages to
+the Kafka 'stock-prices' topic.
+
+APIs used:
+  - Finnhub /quote        → real-time stock prices (AAPL, TSLA, …)
+  - Alpha Vantage CURRENCY_EXCHANGE_RATE → crypto (BTC-USD, ETH-USD)
+  - Alpha Vantage GLOBAL_QUOTE           → index proxies (SPY, QQQ)
 
 Run:
     python ingestion/stock_producer.py
@@ -13,8 +19,6 @@ import logging
 import time
 from datetime import datetime, timezone
 
-import pandas as pd
-import yfinance as yf
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
@@ -27,8 +31,12 @@ from config.settings import (
     TOPICS,
     ALL_TICKERS,
     STOCK_POLL_INTERVAL_SECONDS,
-    YFINANCE_PERIOD,
-    YFINANCE_INTERVAL,
+    CRYPTO_POLL_INTERVAL_SECONDS,
+)
+from ingestion.live_data_fetcher import (
+    fetch_all_stock_quotes,
+    fetch_all_crypto_quotes,
+    fetch_all_index_quotes,
 )
 
 logging.basicConfig(
@@ -50,73 +58,57 @@ def build_producer() -> KafkaProducer:
     )
 
 
-def fetch_latest_bar(ticker: str) -> dict | None:
-    """
-    Download recent data for a ticker and return the last available bar
-    as a plain dict.  Returns None if no data is available.
-    """
-    try:
-        df = yf.download(
-            ticker,
-            period=YFINANCE_PERIOD,
-            interval=YFINANCE_INTERVAL,
-            progress=False,
-            auto_adjust=True,
-        )
-        if df.empty:
-            logger.warning("No data returned for %s", ticker)
-            return None
-
-        # Flatten multi-level columns (yfinance >= 0.2.38 returns MultiIndex)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        row = df.iloc[-1]
-        bar_time = str(df.index[-1])
-
-        return {
-            "ticker":      ticker,
-            "open":        round(float(row["Open"]),   4),
-            "high":        round(float(row["High"]),   4),
-            "low":         round(float(row["Low"]),    4),
-            "close":       round(float(row["Close"]),  4),
-            "volume":      int(row["Volume"]),
-            "bar_time":    bar_time,
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as exc:
-        logger.error("Error fetching data for %s: %s", ticker, exc)
-        return None
+def _publish_bars(producer: KafkaProducer, topic: str, bars: list[dict]) -> int:
+    """Publish a list of price bars to Kafka. Returns count of published."""
+    published = 0
+    for bar in bars:
+        try:
+            future = producer.send(topic, key=bar["ticker"], value=bar)
+            future.get(timeout=10)
+            published += 1
+            logger.debug(
+                "Published: %s close=%.4f @ %s",
+                bar["ticker"], bar["close"], bar["bar_time"],
+            )
+        except KafkaError as exc:
+            logger.error("Kafka send error for %s: %s", bar["ticker"], exc)
+    return published
 
 
 def run():
-    """Main loop: fetch latest price bar for each ticker and publish to Kafka."""
+    """Main loop: fetch live prices and publish to Kafka."""
     logger.info("Connecting to Kafka broker at %s …", KAFKA_BROKER)
     producer = build_producer()
     topic = TOPICS["prices"]
 
-    logger.info("Starting stock price producer — polling every %ds", STOCK_POLL_INTERVAL_SECONDS)
-    logger.info("Tickers: %s", ALL_TICKERS)
-    logger.info("Publishing to topic: %s", topic)
+    logger.info("Starting stock price producer (Finnhub + Alpha Vantage)")
+    logger.info("  Stock polling every %ds, Crypto/Index every %ds",
+                STOCK_POLL_INTERVAL_SECONDS, CRYPTO_POLL_INTERVAL_SECONDS)
+    logger.info("  Tickers: %s", ALL_TICKERS)
+    logger.info("  Publishing to topic: %s", topic)
+
+    last_crypto_fetch = 0.0
 
     while True:
         published = 0
-        for ticker in ALL_TICKERS:
-            bar = fetch_latest_bar(ticker)
-            if bar is None:
-                continue
-            try:
-                future = producer.send(topic, key=ticker, value=bar)
-                future.get(timeout=10)
-                published += 1
-                logger.debug(
-                    "Published: %s close=%.4f @ %s",
-                    ticker, bar["close"], bar["bar_time"],
-                )
-            except KafkaError as exc:
-                logger.error("Kafka send error for %s: %s", ticker, exc)
 
-        logger.info("Cycle complete — %d/%d tickers published", published, len(ALL_TICKERS))
+        # ── Stocks (Finnhub) — every cycle ──
+        stock_bars = fetch_all_stock_quotes()
+        published += _publish_bars(producer, topic, stock_bars)
+
+        # ── Crypto + Indices (Alpha Vantage) — less frequent ──
+        now = time.time()
+        if now - last_crypto_fetch >= CRYPTO_POLL_INTERVAL_SECONDS:
+            crypto_bars = fetch_all_crypto_quotes()
+            published += _publish_bars(producer, topic, crypto_bars)
+
+            index_bars = fetch_all_index_quotes()
+            published += _publish_bars(producer, topic, index_bars)
+
+            last_crypto_fetch = now
+            logger.info("  Crypto + Index refresh done")
+
+        logger.info("Cycle complete — %d tickers published", published)
         time.sleep(STOCK_POLL_INTERVAL_SECONDS)
 
 

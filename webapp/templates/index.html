@@ -40,6 +40,9 @@
     <button class="nav-item-link" onclick="showSection('news',this)">
       <i class="bi bi-newspaper"></i> News Feed
     </button>
+    <button class="nav-item-link" onclick="showSection('stock-detail',this); setTimeout(()=>document.getElementById('stock-search-input').focus(),100)">
+      <i class="bi bi-search"></i> Stock Lookup
+    </button>
 
     <div class="sidebar-section-label">Intelligence</div>
     <button class="nav-item-link" onclick="showSection('analysis',this)">
@@ -76,6 +79,13 @@
     <span class="topbar-title" id="topbar-title">Dashboard</span>
     <span class="live-badge"><span class="dot"></span>Live</span>
 
+    <!-- Stock Search -->
+    <div class="stock-search-wrap" id="stock-search-wrap">
+      <i class="bi bi-search stock-search-icon"></i>
+      <input type="text" id="stock-search-input" class="stock-search-input" placeholder="Search any ticker…" autocomplete="off" oninput="onSearchInput(this.value)" onkeydown="onSearchKeydown(event)" onfocus="this.parentElement.classList.add('focused')" onblur="setTimeout(()=>{this.parentElement.classList.remove('focused');document.getElementById('search-dropdown').style.display='none'},200)"/>
+      <div class="search-dropdown" id="search-dropdown"></div>
+    </div>
+
     <!-- Ticker tape -->
     <div class="ticker-wrapper">
       <div class="ticker-track" id="ticker-track">
@@ -86,6 +96,9 @@
     <span class="topbar-time" id="topbar-clock">{{ now }}</span>
     <button class="topbar-refresh" id="refresh-btn" onclick="refreshAll(this)" title="Refresh data">
       <i class="bi bi-arrow-clockwise"></i>
+    </button>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+      <i class="bi bi-moon-fill" id="theme-icon"></i>
     </button>
   </header>
 
@@ -275,6 +288,17 @@
           <div class="header-icon hi-red"><i class="bi bi-shield-exclamation"></i></div>
           Risk Alerts
           <span style="margin-left:8px;font-size:0.68rem;color:var(--text-muted);font-weight:400">Powered by sentiment analysis + price movement detection</span>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <div class="stock-search-wrap" style="min-width:160px;max-width:200px">
+              <i class="bi bi-search stock-search-icon"></i>
+              <input type="text" class="stock-search-input" id="risk-search-input" placeholder="Filter by ticker…" oninput="filterRiskAlerts(this.value)"/>
+            </div>
+            <div style="display:flex;gap:4px">
+              <button class="sd-range-btn active" onclick="filterRiskLevel('',this)">All</button>
+              <button class="sd-range-btn" onclick="filterRiskLevel('high',this)">High</button>
+              <button class="sd-range-btn" onclick="filterRiskLevel('medium',this)">Medium</button>
+            </div>
+          </div>
         </div>
         <div class="g-card-body" id="risk-list" style="max-height:600px;overflow-y:auto">
           <p style="text-align:center;color:var(--text-muted);padding:24px 0">Loading alerts…</p>
@@ -378,6 +402,135 @@
       </div>
     </section>
 
+    <!-- ════════════════════════ STOCK DETAIL ════════════════════════ -->
+    <section id="sec-stock-detail" style="display:none">
+      <!-- Loading state -->
+      <div id="sd-loading" style="text-align:center;padding:60px 0">
+        <div class="loader-ring" style="margin:0 auto 16px"></div>
+        <div style="color:var(--text-muted);font-size:0.85rem">Loading stock data…</div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="sd-empty" style="text-align:center;padding:60px 0">
+        <i class="bi bi-search" style="font-size:3rem;color:var(--text-muted);display:block;margin-bottom:12px"></i>
+        <div style="font-size:1rem;color:var(--text-secondary);margin-bottom:6px">Search for any stock ticker</div>
+        <div style="font-size:0.8rem;color:var(--text-muted)">Type a symbol like AAPL, META, AMD in the search bar above</div>
+      </div>
+
+      <!-- Content (hidden until loaded) -->
+      <div id="sd-content" style="display:none">
+        <!-- Row 1: Company Header + Live Price -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+          <div class="g-card">
+            <div class="g-card-body" style="display:flex;align-items:center;gap:16px">
+              <img id="sd-logo" src="" alt="" style="width:56px;height:56px;border-radius:12px;background:var(--bg-hover);object-fit:contain" onerror="this.style.display='none'"/>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:1.3rem;font-weight:700;color:var(--text-primary)" id="sd-name">—</span>
+                  <span style="font-size:0.85rem;font-weight:700;color:var(--accent-cyan);background:rgba(0,212,255,0.1);padding:2px 10px;border-radius:999px;border:1px solid rgba(0,212,255,0.2)" id="sd-ticker">—</span>
+                </div>
+                <div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">
+                  <span style="font-size:0.72rem;color:var(--text-muted)"><i class="bi bi-building" style="margin-right:3px"></i><span id="sd-exchange">—</span></span>
+                  <span style="font-size:0.72rem;color:var(--text-muted)"><i class="bi bi-briefcase" style="margin-right:3px"></i><span id="sd-industry">—</span></span>
+                  <span style="font-size:0.72rem;color:var(--text-muted)"><i class="bi bi-globe" style="margin-right:3px"></i><span id="sd-country">—</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="g-card">
+            <div class="g-card-body" style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+              <div>
+                <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Current Price</div>
+                <div style="font-size:2rem;font-weight:700;line-height:1" id="sd-price">—</div>
+                <div style="margin-top:6px" id="sd-change-wrap">
+                  <span class="change-pill" id="sd-change-pill">—</span>
+                </div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px">Day Range</div>
+                <div style="font-size:0.82rem;color:var(--text-secondary)" id="sd-day-range">—</div>
+                <div style="font-size:0.68rem;color:var(--text-muted);margin-top:8px">52-Week Range</div>
+                <div style="font-size:0.82rem;color:var(--text-secondary)" id="sd-52w-range">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Price Chart -->
+        <div class="g-card" style="margin-bottom:18px">
+          <div class="g-card-header">
+            <div class="header-icon hi-cyan"><i class="bi bi-graph-up"></i></div>
+            Price Chart
+            <div style="margin-left:auto;display:flex;gap:4px" id="sd-chart-btns">
+              <button class="sd-range-btn" data-range="1D" onclick="loadStockChart('1D',this)">1D</button>
+              <button class="sd-range-btn" data-range="1W" onclick="loadStockChart('1W',this)">1W</button>
+              <button class="sd-range-btn active" data-range="1M" onclick="loadStockChart('1M',this)">1M</button>
+              <button class="sd-range-btn" data-range="3M" onclick="loadStockChart('3M',this)">3M</button>
+            </div>
+          </div>
+          <div class="g-card-body chart-container" style="height:280px">
+            <canvas id="sd-price-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Row 3: Key Financials -->
+        <div class="g-card" style="margin-bottom:18px">
+          <div class="g-card-header">
+            <div class="header-icon hi-yellow"><i class="bi bi-currency-dollar"></i></div>
+            Key Financials
+          </div>
+          <div class="g-card-body">
+            <div class="sd-financials-grid" id="sd-financials">
+              <!-- populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: News + Social & Peers -->
+        <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px">
+          <div class="g-card" style="display:flex;flex-direction:column">
+            <div class="g-card-header">
+              <div class="header-icon hi-green"><i class="bi bi-newspaper"></i></div>
+              Company News
+            </div>
+            <div class="g-card-body" id="sd-news-list" style="overflow-y:auto;max-height:400px;flex:1">
+              <p style="text-align:center;color:var(--text-muted);padding:24px 0">Loading…</p>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <!-- Social Sentiment -->
+            <div class="g-card">
+              <div class="g-card-header">
+                <div class="header-icon hi-purple"><i class="bi bi-reddit"></i></div>
+                Reddit Sentiment
+              </div>
+              <div class="g-card-body" id="sd-social">
+                <p style="text-align:center;color:var(--text-muted);padding:16px 0">Loading…</p>
+              </div>
+            </div>
+
+            <!-- Peer Comparison -->
+            <div class="g-card" style="flex:1">
+              <div class="g-card-header">
+                <div class="header-icon hi-blue"><i class="bi bi-people"></i></div>
+                Industry Peers
+              </div>
+              <div style="overflow:auto;max-height:260px">
+                <table class="prices-table">
+                  <thead><tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">Change</th></tr></thead>
+                  <tbody id="sd-peers-tbody">
+                    <tr><td colspan="3" style="text-align:center;padding:16px;color:var(--text-muted)">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ════════════════════════ CHAT (standalone) ════════════════════════ -->
     <section id="sec-chat" style="display:none">
       <div class="g-card" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column">
@@ -425,6 +578,35 @@
   </main>
 </div><!-- /main-wrapper -->
 
+<!-- ══════════════════════════════════════════
+     NEWS DETAIL MODAL
+══════════════════════════════════════════ -->
+<div id="news-modal-overlay" class="news-modal-overlay" onclick="if(event.target===this)closeNewsModal()" style="display:none">
+  <div class="news-modal">
+    <button class="news-modal-close" onclick="closeNewsModal()"><i class="bi bi-x-lg"></i></button>
+    <div class="news-modal-body">
+      <div id="nm-image-wrap" style="margin-bottom:16px;border-radius:10px;overflow:hidden;display:none">
+        <img id="nm-image" src="" alt="" style="width:100%;max-height:260px;object-fit:cover"/>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span class="sent-badge" id="nm-sentiment">—</span>
+        <span style="font-size:0.7rem;color:var(--text-muted)" id="nm-source">—</span>
+        <span style="font-size:0.65rem;color:var(--text-muted)">•</span>
+        <span style="font-size:0.7rem;color:var(--text-muted)" id="nm-time">—</span>
+        <span id="nm-tickers" style="margin-left:auto"></span>
+      </div>
+      <h2 style="font-size:1.15rem;font-weight:700;color:var(--text-primary);line-height:1.4;margin-bottom:14px" id="nm-title">—</h2>
+      <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;margin-bottom:20px" id="nm-summary">—</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <a id="nm-link" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:600;color:var(--accent-cyan);text-decoration:none;padding:6px 14px;border:1px solid rgba(6,182,212,0.3);border-radius:999px;transition:all 0.2s">
+          <i class="bi bi-box-arrow-up-right"></i> Read Full Article
+        </a>
+        <span style="font-size:0.68rem;color:var(--text-muted)" id="nm-category">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- ══════════════════════════════════════════
      SCRIPTS
@@ -433,15 +615,36 @@
 <script>
 'use strict';
 
+// ── Theme Toggle ─────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('finintel-theme', next);
+  const icon = document.getElementById('theme-icon');
+  icon.className = next === 'light' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+}
+(function initTheme() {
+  const saved = localStorage.getItem('finintel-theme') || 'dark';
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.className = 'bi bi-sun-fill';
+  }
+})();
+
 // ── Shared state ──────────────────────────────────────────────────
 let pricesData = {};
 let sentimentTrend = [];
 let donutChart1 = null, donutChart2 = null, trendChart1 = null, trendChart2 = null, sourceChart = null, assetChart = null;
 let currentNewsFilter = '';
+let _currentSymbol = '';
 
 const SECTION_TITLES = {
   dashboard: 'Dashboard', market: 'Market Prices', news: 'News Feed',
   analysis: 'Sentiment Analysis', risk: 'Risk Alerts', chat: 'AI Chat',
+  'stock-detail': 'Stock Lookup',
 };
 
 // ── Navigation ────────────────────────────────────────────────────
@@ -453,6 +656,11 @@ function showSection(name, btn) {
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
 
   if (name === 'analysis') initAnalysisCharts();
+  if (name === 'stock-detail' && !_currentSymbol) {
+    document.getElementById('sd-loading').style.display = 'none';
+    document.getElementById('sd-empty').style.display = '';
+    document.getElementById('sd-content').style.display = 'none';
+  }
 }
 
 // ── Clock ─────────────────────────────────────────────────────────
@@ -487,7 +695,7 @@ function priceRow(ticker, info) {
   const up   = info.change_pct >= 0;
   const vol  = info.volume > 0 ? info.volume.toLocaleString() : '—';
   const pct  = (info.volume / MAX_VOL * 100).toFixed(0);
-  return `<tr>
+  return `<tr style="cursor:pointer" onclick="document.getElementById('stock-search-input').value='${ticker}';loadStockDetail('${ticker}')">
     <td><span class="ticker-chip"><span class="t-dot" style="background:${up?'var(--accent-green)':'var(--accent-red)'}"></span>${ticker}</span></td>
     <td style="text-align:right" class="${up?'price-up':'price-down'}">$${info.close.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     <td style="text-align:right"><span class="change-pill ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(info.change_pct).toFixed(2)}%</span></td>
@@ -518,12 +726,17 @@ function relativeTime(iso) {
   return Math.floor(diff/1440) + 'd ago';
 }
 
+let _newsCache = {};
+
 function newsHTML(articles) {
   if (!articles.length) return '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No articles found.</p>';
-  return articles.map(a => `
-    <div class="news-item">
+  return articles.map(a => {
+    const aid = a.id || a.url;
+    _newsCache[aid] = a;
+    return `
+    <div class="news-item news-item-clickable" onclick="openNewsModal('${aid}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <a href="${a.url}" target="_blank" class="news-item-title">${a.title}</a>
+        <span class="news-item-title">${a.title}</span>
         <span class="sent-badge ${a.sentiment}">${a.sentiment||'n/a'}</span>
       </div>
       <p class="news-summary">${a.summary||''}</p>
@@ -532,7 +745,49 @@ function newsHTML(articles) {
         <span style="color:var(--text-muted);font-size:0.65rem">•</span>
         <span class="news-time">${relativeTime(a.published)}</span>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+function openNewsModal(aid) {
+  const a = _newsCache[aid];
+  if (!a) return;
+  const overlay = document.getElementById('news-modal-overlay');
+  // Image
+  const imgWrap = document.getElementById('nm-image-wrap');
+  const img = document.getElementById('nm-image');
+  if (a.image) { img.src = a.image; imgWrap.style.display = ''; img.onerror = () => { imgWrap.style.display = 'none'; }; }
+  else { imgWrap.style.display = 'none'; }
+  // Sentiment badge
+  const sentEl = document.getElementById('nm-sentiment');
+  sentEl.textContent = a.sentiment || 'n/a';
+  sentEl.className = 'sent-badge ' + (a.sentiment || '');
+  // Meta
+  document.getElementById('nm-source').innerHTML = '<i class="bi bi-broadcast" style="margin-right:3px"></i>' + (a.source || '—');
+  document.getElementById('nm-time').textContent = a.published ? relativeTime(a.published) : '—';
+  // Tickers
+  const tickers = a.tickers || [];
+  document.getElementById('nm-tickers').innerHTML = (Array.isArray(tickers) ? tickers : []).map(t =>
+    `<span style="font-size:0.68rem;font-weight:700;color:var(--accent-cyan);background:rgba(6,182,212,0.1);padding:2px 8px;border-radius:999px;border:1px solid rgba(6,182,212,0.2);margin-left:4px">${t}</span>`
+  ).join('');
+  // Title & summary
+  document.getElementById('nm-title').textContent = a.title || '—';
+  document.getElementById('nm-summary').textContent = a.summary || 'No detailed summary available for this article.';
+  // Link — only show if it's a real URL (not example.com)
+  const linkEl = document.getElementById('nm-link');
+  const isReal = a.url && !a.url.includes('example.com') && a.url.startsWith('http');
+  linkEl.href = isReal ? a.url : '#';
+  linkEl.style.display = isReal ? '' : 'none';
+  // Category
+  document.getElementById('nm-category').textContent = a.category ? 'Category: ' + a.category : '';
+  // Show
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNewsModal() {
+  document.getElementById('news-modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 async function loadNews(sentiment) {
@@ -703,12 +958,12 @@ async function initAnalysisCharts() {
 
 // ── Risk Alerts ───────────────────────────────────────────────────
 const RISK_ICONS = { high: 'bi-exclamation-triangle-fill', medium: 'bi-exclamation-circle-fill', low: 'bi-info-circle-fill' };
+let _allRiskAlerts = [];
+let _riskTickerFilter = '';
+let _riskLevelFilter = '';
 
-async function loadRiskAlerts() {
-  const resp = await fetch('/api/risk-alerts');
-  const data = await resp.json();
-  document.getElementById('risk-badge').textContent = data.count;
-  const html = data.alerts.map(a => `
+function renderRiskAlerts(alerts) {
+  const html = alerts.map(a => `
     <div class="risk-item">
       <div class="risk-level-icon ${a.level}"><i class="bi ${RISK_ICONS[a.level]||'bi-dot'}"></i></div>
       <div style="flex:1;min-width:0">
@@ -721,7 +976,39 @@ async function loadRiskAlerts() {
       </div>
       <div class="risk-time">${a.time}</div>
     </div>`).join('');
-  document.getElementById('risk-list').innerHTML = html || '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No active alerts.</p>';
+  document.getElementById('risk-list').innerHTML = html || '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No alerts match your filter.</p>';
+}
+
+function applyRiskFilters() {
+  let filtered = _allRiskAlerts;
+  if (_riskTickerFilter) {
+    filtered = filtered.filter(a => a.ticker.toLowerCase().includes(_riskTickerFilter.toLowerCase()));
+  }
+  if (_riskLevelFilter) {
+    filtered = filtered.filter(a => a.level === _riskLevelFilter);
+  }
+  renderRiskAlerts(filtered);
+}
+
+function filterRiskAlerts(query) {
+  _riskTickerFilter = query.trim();
+  applyRiskFilters();
+}
+
+function filterRiskLevel(level, btn) {
+  _riskLevelFilter = level;
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.sd-range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyRiskFilters();
+}
+
+async function loadRiskAlerts() {
+  const resp = await fetch('/api/risk-alerts');
+  const data = await resp.json();
+  _allRiskAlerts = data.alerts || [];
+  document.getElementById('risk-badge').textContent = data.count;
+  applyRiskFilters();
 }
 
 // ── Chat ──────────────────────────────────────────────────────────
@@ -767,6 +1054,297 @@ function sendChatFull() { sendChatTo('chat-messages-full', 'chat-input-full', 'c
 
 function setPrompt(btn)     { document.getElementById('chat-input').value = btn.textContent.trim(); document.getElementById('chat-input').focus(); }
 function setPromptFull(btn) { document.getElementById('chat-input-full').value = btn.textContent.trim(); document.getElementById('chat-input-full').focus(); }
+
+// ── Stock Search & Detail ─────────────────────────────────────────
+let _searchTimer = null;
+let _searchResults = [];
+let _searchIdx = -1;
+let _sdChart = null;
+
+function onSearchInput(val) {
+  clearTimeout(_searchTimer);
+  const dd = document.getElementById('search-dropdown');
+  if (!val || val.length < 1) { dd.style.display = 'none'; return; }
+  _searchTimer = setTimeout(async () => {
+    try {
+      const resp = await fetch('/api/search?q=' + encodeURIComponent(val));
+      _searchResults = await resp.json();
+      _searchIdx = -1;
+      if (!_searchResults.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = _searchResults.map((r, i) =>
+        `<div class="search-item" data-idx="${i}" onmousedown="selectSearchResult(${i})">
+          <span class="search-item-sym">${r.symbol}</span>
+          <span class="search-item-desc">${r.description}</span>
+        </div>`
+      ).join('');
+      dd.style.display = 'block';
+    } catch(e) { dd.style.display = 'none'; }
+  }, 300);
+}
+
+function onSearchKeydown(e) {
+  const dd = document.getElementById('search-dropdown');
+  const items = dd.querySelectorAll('.search-item');
+  if (e.key === 'ArrowDown') { e.preventDefault(); _searchIdx = Math.min(_searchIdx + 1, items.length - 1); highlightSearchItem(items); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); _searchIdx = Math.max(_searchIdx - 1, 0); highlightSearchItem(items); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_searchIdx >= 0 && _searchResults[_searchIdx]) selectSearchResult(_searchIdx);
+    else if (document.getElementById('stock-search-input').value.trim()) {
+      loadStockDetail(document.getElementById('stock-search-input').value.trim().toUpperCase());
+    }
+  }
+  else if (e.key === 'Escape') { dd.style.display = 'none'; }
+}
+
+function highlightSearchItem(items) {
+  items.forEach((el, i) => el.classList.toggle('highlighted', i === _searchIdx));
+  if (items[_searchIdx]) items[_searchIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function selectSearchResult(idx) {
+  const r = _searchResults[idx];
+  if (!r) return;
+  document.getElementById('search-dropdown').style.display = 'none';
+  document.getElementById('stock-search-input').value = r.symbol;
+  loadStockDetail(r.symbol);
+}
+
+async function loadStockDetail(symbol) {
+  _currentSymbol = symbol;
+  // Navigate to section
+  showSection('stock-detail');
+  document.querySelectorAll('.nav-item-link').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === 'Stock Lookup');
+  });
+
+  // Show loading, hide content
+  document.getElementById('sd-loading').style.display = '';
+  document.getElementById('sd-empty').style.display = 'none';
+  document.getElementById('sd-content').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/stock/' + encodeURIComponent(symbol));
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    const q = data.quote || {};
+    const p = data.profile || {};
+    const f = data.financials || {};
+
+    // If no valid price data, show error
+    if ((!q.close || q.close === 0) && !p.name) {
+      document.getElementById('sd-loading').style.display = 'none';
+      document.getElementById('sd-empty').style.display = '';
+      document.getElementById('sd-content').style.display = 'none';
+      document.getElementById('sd-empty').innerHTML = `
+        <i class="bi bi-exclamation-triangle" style="font-size:3rem;color:var(--accent-yellow);display:block;margin-bottom:12px"></i>
+        <div style="font-size:1rem;color:var(--text-secondary);margin-bottom:6px">No data available for <strong>${symbol}</strong></div>
+        <div style="font-size:0.8rem;color:var(--text-muted)">This ticker may not be supported on Finnhub free tier. Try US stocks like AAPL, TSLA, NVDA, META, AMD.</div>`;
+      return;
+    }
+
+    // Header
+    const logo = document.getElementById('sd-logo');
+    if (p.logo) { logo.src = p.logo; logo.style.display = ''; } else { logo.style.display = 'none'; }
+    document.getElementById('sd-name').textContent = p.name || symbol;
+    document.getElementById('sd-ticker').textContent = p.ticker || symbol;
+    document.getElementById('sd-exchange').textContent = p.exchange || '—';
+    document.getElementById('sd-industry').textContent = p.industry || '—';
+    document.getElementById('sd-country').textContent = p.country || '—';
+
+    // Price
+    const price = q.close || 0;
+    const changePct = q.change_pct || 0;
+    const up = changePct >= 0;
+    document.getElementById('sd-price').textContent = '$' + price.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('sd-price').style.color = up ? 'var(--accent-green)' : 'var(--accent-red)';
+    const pill = document.getElementById('sd-change-pill');
+    pill.textContent = (up ? '▲ ' : '▼ ') + Math.abs(changePct).toFixed(2) + '%';
+    pill.className = 'change-pill ' + (up ? 'up' : 'down');
+
+    // Ranges
+    document.getElementById('sd-day-range').textContent = '$' + (q.low||0).toFixed(2) + ' — $' + (q.high||0).toFixed(2);
+    const w52h = f['52WeekHigh'], w52l = f['52WeekLow'];
+    document.getElementById('sd-52w-range').textContent = (w52l != null && w52h != null) ? '$' + w52l.toFixed(2) + ' — $' + w52h.toFixed(2) : '—';
+
+    // Financials grid
+    const mktCap = p.marketCap || f.marketCap;
+    const fmtMC = mktCap ? (mktCap >= 1000 ? (mktCap/1000).toFixed(1)+'T' : mktCap.toFixed(1)+'B') : '—';
+    const metrics = [
+      { label: 'Market Cap', value: fmtMC, icon: 'bi-bank' },
+      { label: 'P/E Ratio', value: f.peRatio != null ? f.peRatio.toFixed(2) : '—', icon: 'bi-calculator' },
+      { label: 'EPS', value: f.eps != null ? '$'+f.eps.toFixed(2) : '—', icon: 'bi-cash-coin' },
+      { label: 'Beta', value: f.beta != null ? f.beta.toFixed(2) : '—', icon: 'bi-activity' },
+      { label: 'Dividend Yield', value: f.dividendYield != null ? f.dividendYield.toFixed(2)+'%' : '—', icon: 'bi-percent' },
+      { label: '52W High', value: w52h != null ? '$'+w52h.toFixed(2) : '—', icon: 'bi-arrow-up-circle' },
+      { label: '52W Low', value: w52l != null ? '$'+w52l.toFixed(2) : '—', icon: 'bi-arrow-down-circle' },
+      { label: 'Avg Volume (10D)', value: f['10DayAvgVolume'] != null ? (f['10DayAvgVolume']).toFixed(2)+'M' : '—', icon: 'bi-bar-chart' },
+    ];
+    document.getElementById('sd-financials').innerHTML = metrics.map(m =>
+      `<div class="sd-fin-item">
+        <div class="sd-fin-icon"><i class="bi ${m.icon}"></i></div>
+        <div class="sd-fin-label">${m.label}</div>
+        <div class="sd-fin-value">${m.value}</div>
+      </div>`
+    ).join('');
+
+    // Show content
+    document.getElementById('sd-loading').style.display = 'none';
+    document.getElementById('sd-content').style.display = '';
+
+    // Load chart, news, social, peers in parallel
+    loadStockChart('1M');
+    loadStockNews(symbol);
+    loadStockSocial(symbol);
+    loadStockPeers(symbol);
+
+  } catch(err) {
+    document.getElementById('sd-loading').style.display = 'none';
+    document.getElementById('sd-empty').style.display = '';
+    document.getElementById('sd-content').style.display = 'none';
+    console.error('Stock detail error:', err);
+  }
+}
+
+async function loadStockChart(range, btn) {
+  if (btn) {
+    document.querySelectorAll('.sd-range-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const now = Math.floor(Date.now() / 1000);
+  let resolution, from;
+  switch(range) {
+    case '1D': resolution = 'D';  from = now - 86400*5; break;
+    case '1W': resolution = 'D';  from = now - 86400*10; break;
+    case '1M': resolution = 'D';  from = now - 86400*35; break;
+    case '3M': resolution = 'D';  from = now - 86400*95; break;
+    default:   resolution = 'D';  from = now - 86400*35;
+  }
+  try {
+    const resp = await fetch(`/api/stock/${_currentSymbol}/candles?resolution=${resolution}&from=${from}&to=${now}`);
+    const data = await resp.json();
+    if (data.error || !data.c || !data.c.length) {
+      const canvas = document.getElementById('sd-price-chart');
+      if (_sdChart) { _sdChart.destroy(); _sdChart = null; }
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted');
+      ctx.font = '13px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No chart data available for this ticker/range', canvas.width/2, canvas.height/2);
+      return;
+    }
+
+    const labels = data.t.map(ts => {
+      const d = new Date(ts * 1000);
+      return (range === '1D' || range === '1W')
+        ? d.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'})
+        : d.toLocaleDateString([], {month:'short', day:'numeric'});
+    });
+
+    const canvas = document.getElementById('sd-price-chart');
+    if (_sdChart) { _sdChart.destroy(); _sdChart = null; }
+    const up = data.c[data.c.length-1] >= data.c[0];
+    const color = up ? '#10b981' : '#ef4444';
+    _sdChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: _currentSymbol,
+          data: data.c,
+          borderColor: color,
+          backgroundColor: up ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+          tension: 0.3, fill: true, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { color: '#3f5c7a', font: {size:10}, maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { color: '#3f5c7a', font: {size:10}, callback: v => '$'+v.toFixed(2) }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      }
+    });
+  } catch(e) { console.warn('Chart load failed:', e); }
+}
+
+async function loadStockNews(symbol) {
+  const el = document.getElementById('sd-news-list');
+  try {
+    const resp = await fetch('/api/stock/' + symbol + '/news?limit=10');
+    const data = await resp.json();
+    if (!data.articles || !data.articles.length) {
+      el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:24px 0">No recent news found.</p>';
+      return;
+    }
+    el.innerHTML = data.articles.map(a => {
+      const aid = a.id || a.url;
+      _newsCache[aid] = a;
+      return `
+      <div class="news-item news-item-clickable" onclick="openNewsModal('${aid}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <span class="news-item-title">${a.title}</span>
+        </div>
+        <p class="news-summary">${a.summary||''}</p>
+        <div class="news-item-meta">
+          <span class="news-source"><i class="bi bi-broadcast" style="margin-right:3px"></i>${a.source}</span>
+          <span style="color:var(--text-muted);font-size:0.65rem">•</span>
+          <span class="news-time">${relativeTime(a.published)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:24px 0">Failed to load news.</p>'; }
+}
+
+async function loadStockSocial(symbol) {
+  const el = document.getElementById('sd-social');
+  try {
+    const resp = await fetch('/api/stock/' + symbol + '/social');
+    const data = await resp.json();
+    if (!data.mentions && !data.rank) {
+      el.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text-muted);font-size:0.82rem">No Reddit data for ' + symbol + '</div>';
+      return;
+    }
+    const sentColor = data.sentiment_hint === 'bullish' ? 'var(--accent-green)' : data.sentiment_hint === 'bearish' ? 'var(--accent-red)' : 'var(--accent-blue)';
+    const sentBg = data.sentiment_hint === 'bullish' ? 'rgba(16,185,129,0.12)' : data.sentiment_hint === 'bearish' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.1)';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Mentions</div>
+          <div style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">${data.mentions || 0}</div>
+        </div>
+        <div style="flex:1;min-width:100px">
+          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Rank</div>
+          <div style="font-size:1.5rem;font-weight:700;color:var(--accent-cyan)">#${data.rank || '—'}</div>
+        </div>
+        <div style="flex:1;min-width:100px">
+          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Sentiment</div>
+          <span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:0.78rem;font-weight:600;background:${sentBg};color:${sentColor};text-transform:capitalize">${data.sentiment_hint || '—'}</span>
+        </div>
+      </div>`;
+  } catch(e) { el.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text-muted);font-size:0.82rem">Failed to load social data.</div>'; }
+}
+
+async function loadStockPeers(symbol) {
+  const tbody = document.getElementById('sd-peers-tbody');
+  try {
+    const resp = await fetch('/api/stock/' + symbol + '/peers');
+    const peers = await resp.json();
+    if (!peers.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--text-muted)">No peer data.</td></tr>'; return; }
+    tbody.innerHTML = peers.map(p => {
+      const up = p.change_pct >= 0;
+      return `<tr style="cursor:pointer" onclick="document.getElementById('stock-search-input').value='${p.ticker}';loadStockDetail('${p.ticker}')">
+        <td><span class="ticker-chip"><span class="t-dot" style="background:${up?'var(--accent-green)':'var(--accent-red)'}"></span>${p.ticker}</span></td>
+        <td style="text-align:right" class="${up?'price-up':'price-down'}">$${p.close.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td style="text-align:right"><span class="change-pill ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(p.change_pct).toFixed(2)}%</span></td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--text-muted)">Failed to load peers.</td></tr>'; }
+}
 
 // ── Refresh all ───────────────────────────────────────────────────
 async function refreshAll(btn) {

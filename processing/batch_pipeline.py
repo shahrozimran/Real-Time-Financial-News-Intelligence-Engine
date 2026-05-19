@@ -59,27 +59,43 @@ def run_pipeline(source: str = "sample"):
 
     try:
         # ── Step 3: Load data ──
-        logger.info("[2/7] Loading data...")
+        logger.info("[2/7] Loading data (source=%s)...", source)
         if source == "sample":
             with open(SAMPLE_NEWS_PATH, "r", encoding="utf-8") as f:
                 articles_raw = json.load(f)
             with open(SAMPLE_PRICES_PATH, "r", encoding="utf-8") as f:
                 prices_raw = json.load(f)
+
+            # Flatten price bars into a single list
+            price_rows = []
+            for ticker, bars in prices_raw.items():
+                for bar in bars:
+                    bar["ticker"] = ticker
+                    price_rows.append(bar)
+
+        elif source == "live":
+            logger.info("  Fetching LIVE data from Finnhub / Alpha Vantage / Tradestie...")
+            from ingestion.live_data_fetcher import fetch_all_news, fetch_all_prices
+
+            articles_raw = fetch_all_news(days_back=7)
+            price_rows = fetch_all_prices()
+
+            # price_rows from live API are already flat dicts with 'ticker' key
+            # Add date + change_pct fields expected by Spark analytics
+            from datetime import datetime as dt, timezone as tz
+            for bar in price_rows:
+                if "date" not in bar:
+                    bar["date"] = bar.get("bar_time", dt.now(tz.utc).isoformat())[:10]
+                if "change_pct" not in bar:
+                    bar["change_pct"] = bar.get("change_pct", 0)
+
         else:
             logger.error("Kafka source not yet implemented (Phase 2)")
             return
 
         article_count = len(articles_raw)
         logger.info("  Loaded %d articles", article_count)
-
-        # Flatten price bars into a single list
-        price_rows = []
-        for ticker, bars in prices_raw.items():
-            for bar in bars:
-                bar["ticker"] = ticker
-                price_rows.append(bar)
-        logger.info("  Loaded %d price bars across %d tickers",
-                     len(price_rows), len(prices_raw))
+        logger.info("  Loaded %d price bars", len(price_rows))
 
         # ── Step 4: Clean articles (pandas-based — avoids UDF issues) ──
         logger.info("[3/7] Cleaning articles...")
@@ -207,8 +223,8 @@ def run_pipeline(source: str = "sample"):
 def main():
     parser = argparse.ArgumentParser(description="FinIntel Batch Pipeline")
     parser.add_argument(
-        "--source", choices=["sample", "kafka"], default="sample",
-        help="Data source: sample (default) or kafka"
+        "--source", choices=["sample", "kafka", "live"], default="sample",
+        help="Data source: sample (default), live (Finnhub/Alpha Vantage/Tradestie APIs), or kafka"
     )
     args = parser.parse_args()
     run_pipeline(source=args.source)
