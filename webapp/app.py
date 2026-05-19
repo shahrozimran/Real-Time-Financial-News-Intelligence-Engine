@@ -161,39 +161,6 @@ def api_sentiment_by_asset():
     return jsonify(by_asset)
 
 
-@app.route("/api/chat", methods=["POST"])
-def api_chat():
-    """
-    Accept a user question and return a placeholder answer.
-    Week 3+: this will call the RAG + multi-agent pipeline.
-
-    Request body: {"question": "Why is TSLA dropping?"}
-    Response:     {"question": "...", "answer": "...", "agents": [...], "sources": [...]}
-    """
-    body = request.get_json(force=True, silent=True) or {}
-    question = body.get("question", "").strip()
-
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
-
-    # Placeholder response — will be replaced by RAG agent in Week 3
-    answer = (
-        f"[Week 2 Placeholder] You asked: \"{question}\". "
-        "The RAG + multi-agent pipeline has not been wired up yet. "
-        "This route will return real AI-generated answers from Week 3 onwards."
-    )
-
-    return jsonify({
-        "question": question,
-        "answer":   answer,
-        "agents": [
-            {"name": "Market Analyst",    "response": "— pending Week 3 —"},
-            {"name": "Risk Manager",      "response": "— pending Week 3 —"},
-            {"name": "Portfolio Advisor", "response": "— pending Week 3 —"},
-        ],
-        "sources": [],
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
 
 
 @app.route("/api/risk-alerts")
@@ -321,18 +288,48 @@ def api_search():
 def api_stock_detail(symbol):
     """Fetch combined quote + company profile + financials for a symbol."""
     symbol = symbol.upper()
+    from config.settings import CRYPTO_SYMBOL_MAP, INDEX_SYMBOL_MAP
     try:
+        # ── Crypto (BTC-USD, ETH-USD) ──────────────────────────────
+        if symbol in CRYPTO_SYMBOL_MAP:
+            from ingestion.live_data_fetcher import fetch_alpha_crypto_quote
+            quote = fetch_alpha_crypto_quote(symbol) or {}
+            pair = CRYPTO_SYMBOL_MAP[symbol]
+            profile = {
+                "name":     f"{pair[0]}/{pair[1]}",
+                "ticker":   symbol,
+                "exchange": "Crypto",
+                "industry": "Cryptocurrency",
+                "country":  "Global",
+                "logo":     "",
+            }
+            return jsonify({"quote": quote, "profile": profile, "financials": {}})
+
+        # ── Indices (^GSPC, ^IXIC) ─────────────────────────────────
+        if symbol in INDEX_SYMBOL_MAP:
+            from ingestion.live_data_fetcher import fetch_alpha_index_quote
+            etf_sym = INDEX_SYMBOL_MAP[symbol]
+            quote = fetch_alpha_index_quote(symbol) or {}
+            index_names = {"^GSPC": "S&P 500", "^IXIC": "NASDAQ Composite"}
+            profile = {
+                "name":     index_names.get(symbol, symbol),
+                "ticker":   symbol,
+                "exchange": "Index",
+                "industry": "Market Index",
+                "country":  "US",
+                "logo":     "",
+            }
+            return jsonify({"quote": quote, "profile": profile, "financials": {}})
+
+        # ── Regular Stocks (Finnhub) ────────────────────────────────
         from ingestion.live_data_fetcher import (
             fetch_finnhub_quote, fetch_company_profile, fetch_company_financials,
         )
         quote = fetch_finnhub_quote(symbol) or {}
         profile = fetch_company_profile(symbol) or {}
         financials = fetch_company_financials(symbol) or {}
-        return jsonify({
-            "quote": quote,
-            "profile": profile,
-            "financials": financials,
-        })
+        return jsonify({"quote": quote, "profile": profile, "financials": financials})
+
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -344,9 +341,18 @@ def api_stock_candles(symbol):
     resolution = request.args.get("resolution", "D")
     from_ts = int(request.args.get("from", 0))
     to_ts = int(request.args.get("to", 0))
+    from config.settings import CRYPTO_SYMBOL_MAP, INDEX_SYMBOL_MAP
     try:
         from ingestion.live_data_fetcher import fetch_stock_candles
-        data = fetch_stock_candles(symbol, resolution, from_ts, to_ts)
+
+        # For indices use ETF proxy (e.g. ^GSPC → SPY)
+        fetch_sym = INDEX_SYMBOL_MAP.get(symbol, symbol)
+
+        # For crypto strip the -USD suffix (BTC-USD → BTC then AV handles it)
+        if symbol in CRYPTO_SYMBOL_MAP:
+            fetch_sym = CRYPTO_SYMBOL_MAP[symbol][0]  # e.g. "BTC"
+
+        data = fetch_stock_candles(fetch_sym, resolution, from_ts, to_ts)
         if not data:
             return jsonify({"error": "No candle data available"}), 404
         return jsonify(data)
@@ -401,12 +407,54 @@ def api_stock_social(symbol):
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """
+    RAG + LangGraph multi-agent chat endpoint.
+    Body: { "message": "Why is TSLA dropping?" }
+    Returns: { market_analyst, risk_manager, portfolio_advisor, summary, sources }
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    message = (body.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+    try:
+        from intelligence.agents import run_multi_agent
+        result = run_multi_agent(message)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc), "summary": f"Agent error: {exc}"}), 500
+
+
+@app.route("/api/rag/search")
+def api_rag_search():
+    """
+    Direct Pinecone semantic search (debug/demo endpoint).
+    Query params: q, namespace (articles|prices|sentiment), top_k
+    """
+    query     = request.args.get("q", "").strip()
+    namespace = request.args.get("namespace", "articles")
+    top_k     = int(request.args.get("top_k", 5))
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+    try:
+        from intelligence.rag_retriever import retrieve
+        docs = retrieve(query, namespace=namespace, top_k=top_k)
+        results = [
+            {"text": doc.page_content, "metadata": doc.metadata}
+            for doc in docs
+        ]
+        return jsonify({"query": query, "namespace": namespace, "results": results})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/api/status")
 def api_status():
     """Health-check endpoint."""
     return jsonify({
         "status":    "ok",
-        "version":   "week2",
+        "version":   "week3",
         "pipeline_data": _has_processed_data(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "topics":    ["news-feed", "social-posts", "stock-prices"],

@@ -207,9 +207,27 @@ def run_pipeline(source: str = "sample"):
         upsert_price_bars(price_bars_list)
         upsert_price_snapshot(price_snapshot)
 
+        # ── Step 8: Pinecone vector database ──
+        logger.info("[7/7] Uploading to Pinecone vector database...")
+        try:
+            from storage.pinecone_writer import upsert_all
+            pinecone_counts = upsert_all(
+                articles=articles_clean,
+                price_bars=price_bars_list,
+                aggregates={
+                    "by_source":  by_source_list,
+                    "by_asset":   [{**a, "key": a["ticker"]} for a in by_asset_list],
+                    "by_time":    [{**t, "key": str(t.get("date", ""))} for t in by_time_list],
+                    "top_movers": movers_list,
+                },
+            )
+            logger.info("  Pinecone vectors stored: %s", pinecone_counts)
+        except Exception as pc_exc:
+            logger.warning("Pinecone upsert skipped (non-fatal): %s", pc_exc)
+
         # ── Done ──
         elapsed = time.time() - start
-        logger.info("[7/7] Pipeline complete!")
+        logger.info("[8/8] Pipeline complete!")
         logger.info("  Articles processed: %d", len(articles_clean))
         logger.info("  Price bars stored: %d", len(price_bars_list))
         logger.info("  Output: %s", PROCESSED_DATA_DIR)

@@ -111,35 +111,35 @@
       <!-- KPI Row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
 
-        <div class="kpi-card" style="--kpi-accent:var(--accent-cyan)">
+        <div class="kpi-card kpi-clickable" style="--kpi-accent:var(--accent-cyan)" onclick="showSection('news',document.querySelector('.nav-item-link[onclick*=news]'));loadNews('')">
           <div class="kpi-icon" style="color:var(--accent-cyan)"><i class="bi bi-newspaper"></i></div>
           <div class="kpi-label">Articles Today</div>
           <div class="kpi-value text-cyan" id="kpi-articles">—</div>
-          <div class="kpi-sub">Across 6 sources</div>
+          <div class="kpi-sub">Across 6 sources · Click to view</div>
           <i class="bi bi-newspaper kpi-bg-icon"></i>
         </div>
 
-        <div class="kpi-card" style="--kpi-accent:var(--accent-green)">
+        <div class="kpi-card kpi-clickable" style="--kpi-accent:var(--accent-green)" onclick="showSection('news',document.querySelector('.nav-item-link[onclick*=news]'));loadNews('positive')">
           <div class="kpi-icon" style="color:var(--accent-green)"><i class="bi bi-emoji-smile"></i></div>
           <div class="kpi-label">Positive Sentiment</div>
           <div class="kpi-value text-green" id="kpi-positive">—</div>
-          <div class="kpi-sub">Today's score</div>
+          <div class="kpi-sub">Today's score · Click to view</div>
           <i class="bi bi-emoji-smile kpi-bg-icon"></i>
         </div>
 
-        <div class="kpi-card" style="--kpi-accent:var(--accent-red)">
+        <div class="kpi-card kpi-clickable" style="--kpi-accent:var(--accent-red)" onclick="showSection('news',document.querySelector('.nav-item-link[onclick*=news]'));loadNews('negative')">
           <div class="kpi-icon" style="color:var(--accent-red)"><i class="bi bi-emoji-frown"></i></div>
           <div class="kpi-label">Negative Sentiment</div>
           <div class="kpi-value text-red" id="kpi-negative">—</div>
-          <div class="kpi-sub">Today's score</div>
+          <div class="kpi-sub">Today's score · Click to view</div>
           <i class="bi bi-emoji-frown kpi-bg-icon"></i>
         </div>
 
-        <div class="kpi-card" style="--kpi-accent:var(--accent-yellow)">
+        <div class="kpi-card kpi-clickable" style="--kpi-accent:var(--accent-yellow)" onclick="showSection('market',document.querySelector('.nav-item-link[onclick*=market]'))">
           <div class="kpi-icon" style="color:var(--accent-yellow)"><i class="bi bi-activity"></i></div>
           <div class="kpi-label">Active Tickers</div>
           <div class="kpi-value text-yellow" id="kpi-tickers">{{ tickers | length }}</div>
-          <div class="kpi-sub">Stocks · Indices · Crypto</div>
+          <div class="kpi-sub">{{ assets.stocks|length }} Stocks · {{ assets.indices|length }} Indices · {{ assets.crypto|length }} Crypto</div>
           <i class="bi bi-activity kpi-bg-icon"></i>
         </div>
       </div>
@@ -250,7 +250,6 @@
           <div class="g-card-header">
             <div class="header-icon hi-purple"><i class="bi bi-cpu"></i></div>
             AI Financial Agent
-            <span style="margin-left:8px;font-size:0.62rem;background:rgba(139,92,246,0.15);color:var(--accent-purple);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;font-weight:600">RAG · Week 3</span>
           </div>
 
           <div id="chat-messages" style="padding:14px;overflow-y:auto;min-height:220px;max-height:280px;flex:1">
@@ -531,47 +530,92 @@
       </div>
     </section>
 
-    <!-- ════════════════════════ CHAT (standalone) ════════════════════════ -->
-    <section id="sec-chat" style="display:none">
-      <div class="g-card" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column">
-        <div class="g-card-header">
-          <div class="header-icon hi-purple"><i class="bi bi-cpu"></i></div>
-          AI Financial Agent
-          <span style="margin-left:8px;font-size:0.62rem;background:rgba(139,92,246,0.15);color:var(--accent-purple);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;font-weight:600">RAG · Multi-Agent · Week 3</span>
-          <div style="margin-left:auto;display:flex;gap:6px">
-            <span style="font-size:0.7rem;background:rgba(16,185,129,0.1);color:var(--accent-green);border:1px solid rgba(16,185,129,0.2);padding:2px 8px;border-radius:999px">
-              <i class="bi bi-person-fill me-1"></i>Market Analyst
-            </span>
-            <span style="font-size:0.7rem;background:rgba(239,68,68,0.1);color:var(--accent-red);border:1px solid rgba(239,68,68,0.2);padding:2px 8px;border-radius:999px">
-              <i class="bi bi-shield-fill me-1"></i>Risk Manager
-            </span>
-            <span style="font-size:0.7rem;background:rgba(59,130,246,0.1);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.2);padding:2px 8px;border-radius:999px">
-              <i class="bi bi-briefcase-fill me-1"></i>Portfolio Advisor
-            </span>
+    <!-- ════════════════════════ CHAT (full-page) ════════════════════════ -->
+    <section id="sec-chat" style="display:none;height:100%;display:none">
+      <div class="chat-fullpage">
+
+        <!-- ── Header ── -->
+        <div class="cfp-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="header-icon hi-purple" style="width:34px;height:34px;font-size:1rem"><i class="bi bi-cpu-fill"></i></div>
+            <span style="font-weight:700;font-size:1rem">AI Financial Agent</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span class="cfp-agent-pill" style="color:#10b981;border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.08)"><i class="bi bi-graph-up"></i> Market Analyst</span>
+            <span class="cfp-agent-pill" style="color:#ef4444;border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.08)"><i class="bi bi-shield-exclamation"></i> Risk Manager</span>
+            <span class="cfp-agent-pill" style="color:#3b82f6;border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.08)"><i class="bi bi-briefcase"></i> Portfolio Advisor</span>
           </div>
         </div>
-        <div id="chat-messages-full" style="padding:20px;overflow-y:auto;min-height:400px;max-height:500px;display:flex;flex-direction:column;gap:10px">
-          <div style="text-align:center;padding:40px 0">
-            <i class="bi bi-robot" style="font-size:3rem;color:var(--text-muted);display:block;margin-bottom:10px"></i>
-            <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:4px">Three AI agents ready to assist</div>
-            <div style="font-size:0.78rem;color:var(--text-muted)">RAG pipeline will be activated in Week 3</div>
+
+        <!-- ── Agent Pipeline Visualization ── -->
+        <div class="cfp-pipeline" id="cfp-pipeline" style="display:none">
+          <div class="pipeline-node" id="pn-0">
+            <div class="pn-icon"><i class="bi bi-search"></i></div>
+            <div class="pn-label">Retrieve Context</div>
+            <div class="pn-sub" id="pns-0">Searching Pinecone…</div>
+          </div>
+          <div class="pipeline-connector"><span class="pc-line"></span><i class="bi bi-chevron-right pc-arrow"></i></div>
+          <div class="pipeline-node" id="pn-1">
+            <div class="pn-icon" style="color:#10b981"><i class="bi bi-graph-up"></i></div>
+            <div class="pn-label">Market Analyst</div>
+            <div class="pn-sub" id="pns-1">Awaiting…</div>
+          </div>
+          <div class="pipeline-connector"><span class="pc-line"></span><i class="bi bi-chevron-right pc-arrow"></i></div>
+          <div class="pipeline-node" id="pn-2">
+            <div class="pn-icon" style="color:#ef4444"><i class="bi bi-shield-exclamation"></i></div>
+            <div class="pn-label">Risk Manager</div>
+            <div class="pn-sub" id="pns-2">Awaiting…</div>
+          </div>
+          <div class="pipeline-connector"><span class="pc-line"></span><i class="bi bi-chevron-right pc-arrow"></i></div>
+          <div class="pipeline-node" id="pn-3">
+            <div class="pn-icon" style="color:#3b82f6"><i class="bi bi-briefcase"></i></div>
+            <div class="pn-label">Portfolio Advisor</div>
+            <div class="pn-sub" id="pns-3">Awaiting…</div>
+          </div>
+          <div class="pipeline-connector"><span class="pc-line"></span><i class="bi bi-chevron-right pc-arrow"></i></div>
+          <div class="pipeline-node" id="pn-4">
+            <div class="pn-icon" style="color:#f59e0b"><i class="bi bi-stars"></i></div>
+            <div class="pn-label">Summarizer</div>
+            <div class="pn-sub" id="pns-4">Awaiting…</div>
           </div>
         </div>
-        <div class="g-card-footer" style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;flex-wrap:wrap;gap:6px">
-            <button class="quick-chip" onclick="setPromptFull(this)">Why is the tech sector dropping?</button>
-            <button class="quick-chip" onclick="setPromptFull(this)">TSLA sentiment analysis</button>
-            <button class="quick-chip" onclick="setPromptFull(this)">Main market risks today</button>
-            <button class="quick-chip" onclick="setPromptFull(this)">Summarise NASDAQ news</button>
-            <button class="quick-chip" onclick="setPromptFull(this)">Should I be cautious about AMZN?</button>
+
+        <!-- ── Messages ── -->
+        <div class="cfp-messages" id="chat-messages-full">
+          <div class="cfp-welcome">
+            <div class="cfp-welcome-icon"><i class="bi bi-robot"></i></div>
+            <div class="cfp-welcome-title">Three AI Agents Ready</div>
+            <div class="cfp-welcome-sub">Ask about any stock, market event, sector trend, or financial risk</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px">
+              <button class="quick-chip" onclick="setPromptFull(this)">Why is the tech sector dropping?</button>
+              <button class="quick-chip" onclick="setPromptFull(this)">TSLA sentiment analysis</button>
+              <button class="quick-chip" onclick="setPromptFull(this)">Main market risks today</button>
+              <button class="quick-chip" onclick="setPromptFull(this)">Summarise NASDAQ news</button>
+              <button class="quick-chip" onclick="setPromptFull(this)">Should I be cautious about AMZN?</button>
+              <button class="quick-chip" onclick="setPromptFull(this)">Bitcoin market outlook</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Input bar ── -->
+        <div class="cfp-input-bar">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="cfp-chips">
+            <button class="quick-chip" onclick="setPromptFull(this)">Why is TSLA dropping?</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">NVDA sentiment today</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Top market risks</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Summarise NASDAQ</button>
+            <button class="quick-chip" onclick="setPromptFull(this)">Bitcoin outlook</button>
           </div>
           <div class="chat-input-wrap">
-            <input type="text" id="chat-input-full" placeholder="Ask about any stock, sector, index, or market event…" onkeydown="if(event.key==='Enter')sendChatFull()"/>
+            <input type="text" id="chat-input-full"
+              placeholder="Ask about any stock, sector, index, or market event…"
+              onkeydown="if(event.key==='Enter')sendChatFull()"/>
             <button class="chat-send-btn" id="chat-send-full" onclick="sendChatFull()">
               <i class="bi bi-send-fill"></i>
             </button>
           </div>
         </div>
+
       </div>
     </section>
 
@@ -649,8 +693,24 @@ const SECTION_TITLES = {
 
 // ── Navigation ────────────────────────────────────────────────────
 function showSection(name, btn) {
-  document.querySelectorAll('[id^="sec-"]').forEach(s => s.style.display = 'none');
-  document.getElementById('sec-' + name).style.display = '';
+  document.querySelectorAll('[id^="sec-"]').forEach(s => {
+    s.style.display = 'none';
+    s.classList.remove('active-section');
+  });
+  const sec = document.getElementById('sec-' + name);
+  const pc  = document.getElementById('page-content');
+
+  if (name === 'chat') {
+    // Full-page mode: remove page-content padding, use flex on section
+    if (pc) pc.style.padding = '0';
+    sec.style.display = 'flex';
+    sec.style.flexDirection = 'column';
+    sec.classList.add('active-section');
+  } else {
+    if (pc) pc.style.padding = '';
+    sec.style.display = '';
+  }
+
   document.querySelectorAll('.nav-item-link').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
@@ -792,7 +852,14 @@ function closeNewsModal() {
 
 async function loadNews(sentiment) {
   if (sentiment !== undefined) currentNewsFilter = sentiment;
-  const url = `/api/news?limit=20${currentNewsFilter ? '&sentiment='+currentNewsFilter : ''}`;
+  // Sync all tab groups to reflect the active filter
+  document.querySelectorAll('.news-tabs .nav-link').forEach(t => {
+    const tabFilter = t.textContent.trim().toLowerCase();
+    const match = currentNewsFilter === '' ? tabFilter === 'all'
+                : tabFilter === currentNewsFilter;
+    t.classList.toggle('active', match);
+  });
+  const url = `/api/news?limit=50${currentNewsFilter ? '&sentiment='+currentNewsFilter : ''}`;
   const resp = await fetch(url);
   const data = await resp.json();
   document.getElementById('kpi-articles').textContent = data.count;
@@ -804,8 +871,6 @@ async function loadNews(sentiment) {
 }
 
 function filterNews(sentiment, tab) {
-  document.querySelectorAll('.news-tabs .nav-link').forEach(t => t.classList.remove('active'));
-  if (tab) tab.classList.add('active');
   loadNews(sentiment);
 }
 
@@ -1025,28 +1090,181 @@ function appendMsg(containerId, role, html, id) {
   c.scrollTop = c.scrollHeight;
 }
 
+function _md(text) {
+  // Simple markdown-lite: bold, bullets, line breaks
+  return (text || '')
+    .replace(/</g, '&lt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^• /gm, '&bull; ')
+    .replace(/\n/g, '<br>');
+}
+
+function _agentResponseHTML(data) {
+  // Non-financial query — direct LLM response, no tabs
+  if (data.mode === 'direct' || !data.market_analyst) {
+    return `<div class="agent-direct">${_md(data.summary)}</div>`;
+  }
+
+  const tabs = [
+    { key: 'market_analyst',    label: 'Market Analyst',   icon: 'bi-graph-up-arrow',     color: '#10b981' },
+    { key: 'risk_manager',      label: 'Risk Manager',     icon: 'bi-shield-exclamation', color: '#ef4444' },
+    { key: 'portfolio_advisor', label: 'Portfolio Advisor',icon: 'bi-briefcase',           color: '#3b82f6' },
+  ];
+  const uid = 'agent-' + Date.now();
+
+  const tabBtns = tabs.map((t, i) =>
+    `<button class="agent-tab-btn${i===0?' active':''}" onclick="switchAgentTab(this,'${uid}-${t.key}','${uid}')"
+       style="${i===0?`color:${t.color};border-bottom:2px solid ${t.color}`:''}" data-color="${t.color}">
+       <i class="bi ${t.icon}"></i> ${t.label}
+     </button>`
+  ).join('');
+
+  const tabPanels = tabs.map((t, i) =>
+    `<div id="${uid}-${t.key}" class="agent-tab-panel" style="display:${i===0?'block':'none'}">
+       ${_md(data[t.key] || 'No response.')}
+     </div>`
+  ).join('');
+
+  const summary = data.summary
+    ? `<div class="agent-summary"><i class="bi bi-stars"></i> <strong>AI Summary</strong><br><span style="font-weight:400">${_md(data.summary)}</span></div>`
+    : '';
+
+  const sources = (data.sources||[]).filter(s=>s.title||s.url).slice(0,6);
+  const srcHTML = sources.length
+    ? `<details class="agent-sources">
+         <summary><i class="bi bi-journals"></i> Sources (${sources.length})</summary>
+         <ul>${sources.map(s=>`<li>
+           ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener">${(s.title||s.url).slice(0,90)}</a>`
+                   : `<span>${(s.title||s.source||'').slice(0,90)}</span>`}
+           ${s.sentiment?`<span class="sent-badge ${s.sentiment}">${s.sentiment}</span>`:''}
+         </li>`).join('')}</ul>
+       </details>`
+    : '';
+
+  return `<div id="${uid}" class="agent-response">
+    <div class="agent-tabs">${tabBtns}</div>
+    <div class="agent-panels">${tabPanels}</div>
+    ${summary}
+    ${srcHTML}
+  </div>`;
+}
+
+function switchAgentTab(btn, panelId, uid) {
+  document.querySelectorAll(`#${uid} .agent-tab-btn`).forEach(b => {
+    b.classList.remove('active');
+    b.style.color = '';
+    b.style.borderBottom = '';
+  });
+  document.querySelectorAll(`#${uid} .agent-tab-panel`).forEach(p => p.style.display = 'none');
+  btn.classList.add('active');
+  const col = btn.dataset.color || 'var(--accent-cyan)';
+  btn.style.color = col;
+  btn.style.borderBottom = `2px solid ${col}`;
+  const panel = document.getElementById(panelId);
+  if (panel) panel.style.display = 'block';
+}
+
+// Pipeline node animation helpers
+const _pipelineSteps = [
+  { id: 0, label: 'Searching Pinecone…',    delay: 0    },
+  { id: 1, label: 'Analyzing market…',       delay: 2500 },
+  { id: 2, label: 'Evaluating risks…',       delay: 6000 },
+  { id: 3, label: 'Advising portfolio…',     delay: 9500 },
+  { id: 4, label: 'Writing summary…',        delay: 12500 },
+];
+let _pipelineTimers = [];
+
+function _startPipeline() {
+  const viz = document.getElementById('cfp-pipeline');
+  if (!viz) return;
+  viz.style.display = 'flex';
+  document.querySelectorAll('.pipeline-node').forEach(n => { n.classList.remove('pn-active','pn-done'); });
+  _pipelineTimers.forEach(clearTimeout);
+  _pipelineTimers = [];
+  _pipelineSteps.forEach(step => {
+    const t = setTimeout(() => {
+      // Mark previous as done
+      if (step.id > 0) {
+        const prev = document.getElementById('pn-' + (step.id - 1));
+        if (prev) { prev.classList.remove('pn-active'); prev.classList.add('pn-done'); }
+        const prevConnectors = document.querySelectorAll('.pipeline-connector');
+        if (prevConnectors[step.id - 1]) prevConnectors[step.id - 1].classList.add('pc-done');
+      }
+      const node = document.getElementById('pn-' + step.id);
+      const sub  = document.getElementById('pns-' + step.id);
+      if (node) node.classList.add('pn-active');
+      if (sub)  sub.textContent = step.label;
+    }, step.delay);
+    _pipelineTimers.push(t);
+  });
+}
+
+function _stopPipeline() {
+  _pipelineTimers.forEach(clearTimeout);
+  _pipelineTimers = [];
+  const viz = document.getElementById('cfp-pipeline');
+  if (viz) viz.style.display = 'none';
+  // Reset all
+  document.querySelectorAll('.pipeline-node').forEach(n => n.classList.remove('pn-active','pn-done'));
+  document.querySelectorAll('.pipeline-connector').forEach(c => c.classList.remove('pc-done'));
+  _pipelineSteps.forEach(s => {
+    const sub = document.getElementById('pns-' + s.id);
+    if (sub) sub.textContent = s.id === 0 ? 'Searching Pinecone…' : 'Awaiting…';
+  });
+}
+
 async function sendChatTo(containerId, inputId, sendBtnId) {
   const input = document.getElementById(inputId);
   const btn   = document.getElementById(sendBtnId);
   const q = input.value.trim();
   if (!q) return;
-  input.value = '';
-  btn.disabled = true;
+  input.value = ''; btn.disabled = true;
+
+  // Hide welcome, scroll to bottom
+  const welcome = document.querySelector('.cfp-welcome');
+  if (welcome) welcome.style.display = 'none';
+  const chips = document.getElementById('cfp-chips');
+  if (chips) chips.style.display = 'none';
 
   appendMsg(containerId, 'user', q);
-  const lid = 'ld-' + Date.now();
+
+  // Show typing indicator while waiting
+  const lid = 'loading-' + Date.now();
   appendMsg(containerId, 'agent', '<span class="typing-dots"><span></span><span></span><span></span></span>', lid);
 
+  let pipelineStarted = false;
+
+  // Delay pipeline start by 300ms — skip entirely if response comes back fast (direct LLM)
+  const pipelineDelay = setTimeout(() => {
+    if (containerId === 'chat-messages-full') { _startPipeline(); pipelineStarted = true; }
+  }, 300);
+
   try {
-    const resp = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:q}) });
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: q }),
+    });
     const data = await resp.json();
+    clearTimeout(pipelineDelay);
+    if (pipelineStarted) _stopPipeline();
     document.getElementById(lid)?.remove();
-    appendMsg(containerId, 'agent', data.answer);
-  } catch {
+
+    if (data.error && data.mode === 'error') {
+      appendMsg(containerId, 'agent', `<span style="color:var(--accent-red)"><i class="bi bi-exclamation-circle"></i> ${data.summary}</span>`);
+    } else {
+      appendMsg(containerId, 'agent', _agentResponseHTML(data));
+    }
+  } catch(e) {
+    clearTimeout(pipelineDelay);
+    if (pipelineStarted) _stopPipeline();
     document.getElementById(lid)?.remove();
-    appendMsg(containerId, 'agent', 'Error reaching the AI backend.');
+    appendMsg(containerId, 'agent', '<span style="color:var(--accent-red)"><i class="bi bi-wifi-off"></i> Connection error. Please try again.</span>');
   }
   btn.disabled = false;
+  const c = document.getElementById(containerId);
+  if (c) c.scrollTop = c.scrollHeight;
 }
 
 function sendChat()     { sendChatTo('chat-messages',      'chat-input',      'chat-send'); }
@@ -1140,7 +1358,7 @@ async function loadStockDetail(symbol) {
       document.getElementById('sd-empty').innerHTML = `
         <i class="bi bi-exclamation-triangle" style="font-size:3rem;color:var(--accent-yellow);display:block;margin-bottom:12px"></i>
         <div style="font-size:1rem;color:var(--text-secondary);margin-bottom:6px">No data available for <strong>${symbol}</strong></div>
-        <div style="font-size:0.8rem;color:var(--text-muted)">This ticker may not be supported on Finnhub free tier. Try US stocks like AAPL, TSLA, NVDA, META, AMD.</div>`;
+        <div style="font-size:0.8rem;color:var(--text-muted)">This ticker may not be supported. Try US stocks (AAPL, TSLA, NVDA), crypto (BTC-USD, ETH-USD) or indices (^GSPC, ^IXIC).</div>`;
       return;
     }
 
@@ -1168,19 +1386,53 @@ async function loadStockDetail(symbol) {
     const w52h = f['52WeekHigh'], w52l = f['52WeekLow'];
     document.getElementById('sd-52w-range').textContent = (w52l != null && w52h != null) ? '$' + w52l.toFixed(2) + ' — $' + w52h.toFixed(2) : '—';
 
-    // Financials grid
+    // Financials grid — adaptive per asset type
     const mktCap = p.marketCap || f.marketCap;
     const fmtMC = mktCap ? (mktCap >= 1000 ? (mktCap/1000).toFixed(1)+'T' : mktCap.toFixed(1)+'B') : '—';
-    const metrics = [
-      { label: 'Market Cap', value: fmtMC, icon: 'bi-bank' },
-      { label: 'P/E Ratio', value: f.peRatio != null ? f.peRatio.toFixed(2) : '—', icon: 'bi-calculator' },
-      { label: 'EPS', value: f.eps != null ? '$'+f.eps.toFixed(2) : '—', icon: 'bi-cash-coin' },
-      { label: 'Beta', value: f.beta != null ? f.beta.toFixed(2) : '—', icon: 'bi-activity' },
-      { label: 'Dividend Yield', value: f.dividendYield != null ? f.dividendYield.toFixed(2)+'%' : '—', icon: 'bi-percent' },
-      { label: '52W High', value: w52h != null ? '$'+w52h.toFixed(2) : '—', icon: 'bi-arrow-up-circle' },
-      { label: '52W Low', value: w52l != null ? '$'+w52l.toFixed(2) : '—', icon: 'bi-arrow-down-circle' },
-      { label: 'Avg Volume (10D)', value: f['10DayAvgVolume'] != null ? (f['10DayAvgVolume']).toFixed(2)+'M' : '—', icon: 'bi-bar-chart' },
-    ];
+    const fmtPrice = v => v != null ? '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+    let metrics;
+    if (p.exchange === 'Crypto') {
+      // Crypto-specific metrics from quote
+      const open  = q.open  || 0;
+      const high  = q.high  || 0;
+      const low   = q.low   || 0;
+      const bid   = q.low   || 0;
+      const ask   = q.high  || 0;
+      const chg   = q.change_pct != null ? q.change_pct.toFixed(2)+'%' : '—';
+      metrics = [
+        { label: 'Current Price', value: fmtPrice(q.close),  icon: 'bi-currency-dollar' },
+        { label: 'Open',          value: fmtPrice(open),     icon: 'bi-box-arrow-in-right' },
+        { label: '24h High',      value: fmtPrice(high),     icon: 'bi-arrow-up-circle' },
+        { label: '24h Low',       value: fmtPrice(low),      icon: 'bi-arrow-down-circle' },
+        { label: 'Bid',           value: fmtPrice(bid),      icon: 'bi-chevron-down' },
+        { label: 'Ask',           value: fmtPrice(ask),      icon: 'bi-chevron-up' },
+        { label: 'Change %',      value: chg,                icon: 'bi-activity' },
+        { label: 'Asset Class',   value: 'Cryptocurrency',   icon: 'bi-coin' },
+      ];
+    } else if (p.exchange === 'Index') {
+      metrics = [
+        { label: 'Current Price', value: fmtPrice(q.close),  icon: 'bi-currency-dollar' },
+        { label: 'Open',          value: fmtPrice(q.open),   icon: 'bi-box-arrow-in-right' },
+        { label: 'Day High',      value: fmtPrice(q.high),   icon: 'bi-arrow-up-circle' },
+        { label: 'Day Low',       value: fmtPrice(q.low),    icon: 'bi-arrow-down-circle' },
+        { label: 'Change %',      value: q.change_pct != null ? q.change_pct.toFixed(2)+'%' : '—', icon: 'bi-activity' },
+        { label: 'Prev Close',    value: fmtPrice(q.prev_close), icon: 'bi-clock-history' },
+        { label: '52W High',      value: w52h != null ? fmtPrice(w52h) : '—', icon: 'bi-graph-up-arrow' },
+        { label: '52W Low',       value: w52l != null ? fmtPrice(w52l) : '—', icon: 'bi-graph-down-arrow' },
+      ];
+    } else {
+      metrics = [
+        { label: 'Market Cap',      value: fmtMC, icon: 'bi-bank' },
+        { label: 'P/E Ratio',       value: f.peRatio != null ? f.peRatio.toFixed(2) : '—', icon: 'bi-calculator' },
+        { label: 'EPS',             value: f.eps != null ? '$'+f.eps.toFixed(2) : '—', icon: 'bi-cash-coin' },
+        { label: 'Beta',            value: f.beta != null ? f.beta.toFixed(2) : '—', icon: 'bi-activity' },
+        { label: 'Dividend Yield',  value: f.dividendYield != null ? f.dividendYield.toFixed(2)+'%' : '—', icon: 'bi-percent' },
+        { label: '52W High',        value: w52h != null ? fmtPrice(w52h) : '—', icon: 'bi-arrow-up-circle' },
+        { label: '52W Low',         value: w52l != null ? fmtPrice(w52l) : '—', icon: 'bi-arrow-down-circle' },
+        { label: 'Avg Vol (10D)',   value: f['10DayAvgVolume'] != null ? f['10DayAvgVolume'].toFixed(2)+'M' : '—', icon: 'bi-bar-chart' },
+      ];
+    }
     document.getElementById('sd-financials').innerHTML = metrics.map(m =>
       `<div class="sd-fin-item">
         <div class="sd-fin-icon"><i class="bi ${m.icon}"></i></div>

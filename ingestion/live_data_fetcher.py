@@ -570,32 +570,60 @@ def fetch_company_financials(symbol: str) -> dict | None:
     }
 
 
+_CRYPTO_SYMBOLS = {"BTC", "ETH", "SOL", "BNB", "ADA", "XRP", "DOGE", "DOT", "AVAX", "MATIC"}
+
 def fetch_stock_candles(symbol: str, resolution: str = "D",
                         from_ts: int = 0, to_ts: int = 0) -> dict | None:
     """
-    Fetch OHLCV candle data from Alpha Vantage TIME_SERIES_DAILY.
+    Fetch OHLCV candle data from Alpha Vantage.
+    - Crypto symbols (BTC, ETH) → DIGITAL_CURRENCY_DAILY
+    - Stocks/ETFs              → TIME_SERIES_DAILY
     Returns dict with {t, o, h, l, c, v} arrays for chart compatibility.
-    from_ts / to_ts are used to filter the date range from the full response.
     """
     from datetime import datetime
 
-    data = _safe_get(
-        ALPHA_VANTAGE_BASE_URL,
-        params={
-            "function":   "TIME_SERIES_DAILY",
-            "symbol":     symbol,
-            "outputsize": "compact",
-            "apikey":     ALPHA_VANTAGE_API_KEY,
-        },
-    )
-    if not data or "Time Series (Daily)" not in data:
+    is_crypto = symbol.upper() in _CRYPTO_SYMBOLS
+
+    if is_crypto:
+        _throttle_alpha_vantage()
+        data = _safe_get(
+            ALPHA_VANTAGE_BASE_URL,
+            params={
+                "function": "DIGITAL_CURRENCY_DAILY",
+                "symbol":   symbol.upper(),
+                "market":   "USD",
+                "apikey":   ALPHA_VANTAGE_API_KEY,
+            },
+        )
+        ts_key = "Time Series (Digital Currency Daily)"
+        open_key  = "1a. open (USD)"
+        high_key  = "2a. high (USD)"
+        low_key   = "3a. low (USD)"
+        close_key = "4a. close (USD)"
+        vol_key   = "5. volume"
+    else:
+        data = _safe_get(
+            ALPHA_VANTAGE_BASE_URL,
+            params={
+                "function":   "TIME_SERIES_DAILY",
+                "symbol":     symbol,
+                "outputsize": "compact",
+                "apikey":     ALPHA_VANTAGE_API_KEY,
+            },
+        )
+        ts_key    = "Time Series (Daily)"
+        open_key  = "1. open"
+        high_key  = "2. high"
+        low_key   = "3. low"
+        close_key = "4. close"
+        vol_key   = "5. volume"
+
+    if not data or ts_key not in data:
         return None
 
-    ts_data = data["Time Series (Daily)"]
-    # Sort dates ascending
+    ts_data = data[ts_key]
     sorted_dates = sorted(ts_data.keys())
 
-    # Apply date filters if provided
     if from_ts:
         from_date = datetime.utcfromtimestamp(from_ts).strftime("%Y-%m-%d")
         sorted_dates = [d for d in sorted_dates if d >= from_date]
@@ -611,11 +639,11 @@ def fetch_stock_candles(symbol: str, resolution: str = "D",
         entry = ts_data[date_str]
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         result["t"].append(int(dt.timestamp()))
-        result["o"].append(float(entry.get("1. open", 0)))
-        result["h"].append(float(entry.get("2. high", 0)))
-        result["l"].append(float(entry.get("3. low", 0)))
-        result["c"].append(float(entry.get("4. close", 0)))
-        result["v"].append(int(float(entry.get("5. volume", 0))))
+        result["o"].append(float(entry.get(open_key, 0)))
+        result["h"].append(float(entry.get(high_key, 0)))
+        result["l"].append(float(entry.get(low_key, 0)))
+        result["c"].append(float(entry.get(close_key, 0)))
+        result["v"].append(int(float(entry.get(vol_key, 0))))
 
     return result
 

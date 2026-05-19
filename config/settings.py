@@ -21,6 +21,23 @@ FINNHUB_API_KEY       = os.getenv("FINNHUB_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 
 # ---------------------------------------------------------------------------
+# Pinecone Vector Database
+# ---------------------------------------------------------------------------
+PINECONE_API_KEY    = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX      = os.getenv("PINECONE_INDEX", "finintel")
+PINECONE_CLOUD      = os.getenv("PINECONE_CLOUD", "aws")
+PINECONE_REGION     = os.getenv("PINECONE_REGION", "us-east-1")
+PINECONE_DIMENSION  = 1536   # text-embedding-3-small
+
+# ---------------------------------------------------------------------------
+# OpenRouter (LLM + Embeddings)
+# ---------------------------------------------------------------------------
+OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+LLM_MODEL           = os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
+EMBEDDING_MODEL     = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
+
+# ---------------------------------------------------------------------------
 # API Base URLs
 # ---------------------------------------------------------------------------
 FINNHUB_BASE_URL       = "https://finnhub.io/api/v1"
