@@ -575,18 +575,64 @@ _CRYPTO_SYMBOLS = {"BTC", "ETH", "SOL", "BNB", "ADA", "XRP", "DOGE", "DOT", "AVA
 def fetch_stock_candles(symbol: str, resolution: str = "D",
                         from_ts: int = 0, to_ts: int = 0) -> dict | None:
     """
-    Fetch OHLCV candle data from Alpha Vantage.
-    - Crypto symbols (BTC, ETH) → DIGITAL_CURRENCY_DAILY
-    - Stocks/ETFs              → TIME_SERIES_DAILY
-    Returns dict with {t, o, h, l, c, v} arrays for chart compatibility.
+    Fetch OHLCV candle data.
+    Primary:  Finnhub /stock/candle  (60 req/min free — works for stocks, ETFs, indices)
+    Fallback: Alpha Vantage TIME_SERIES_DAILY / DIGITAL_CURRENCY_DAILY
+    Returns dict with {t, o, h, l, c, v} arrays for chart.js compatibility.
     """
     from datetime import datetime
+    import time as _time
 
     is_crypto = symbol.upper() in _CRYPTO_SYMBOLS
+    now_ts = int(_time.time())
+    _from  = from_ts or (now_ts - 86400 * 100)
+    _to    = to_ts   or now_ts
 
+    # ── 1. Yahoo Finance (primary — free, no key, covers stocks/crypto/indices) ─
+    _RESOLUTION_TO_YF = {
+        "D": "1d", "W": "1wk", "M": "1mo",
+        "60": "60m", "30": "30m", "15": "15m", "5": "5m", "1": "1m",
+    }
+    yf_interval = _RESOLUTION_TO_YF.get(resolution, "1d")
+    yf_symbol   = (symbol.upper() + "-USD") if is_crypto else symbol.upper()
+    try:
+        yf_resp = _session.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}",
+            params={"period1": _from, "period2": _to, "interval": yf_interval},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        yf_resp.raise_for_status()
+        yf_json = yf_resp.json()
+        result_list = yf_json.get("chart", {}).get("result") or []
+        if result_list:
+            r = result_list[0]
+            timestamps = r.get("timestamp", [])
+            q = r.get("indicators", {}).get("quote", [{}])[0]
+            opens  = q.get("open",   [])
+            highs  = q.get("high",   [])
+            lows   = q.get("low",    [])
+            closes = q.get("close",  [])
+            vols   = q.get("volume", [])
+            if timestamps and closes:
+                def _clean(arr, cast=float):
+                    return [cast(v) if v is not None else 0.0 for v in arr]
+                logger.info("Yahoo Finance candles OK for %s (%d bars)", symbol, len(timestamps))
+                return {
+                    "t": timestamps,
+                    "o": _clean(opens),  "h": _clean(highs),
+                    "l": _clean(lows),   "c": _clean(closes),
+                    "v": _clean(vols, int),
+                }
+    except Exception as _yf_exc:
+        logger.warning("Yahoo Finance candles failed for %s: %s", symbol, _yf_exc)
+
+    logger.warning("Yahoo Finance empty for %s, trying Alpha Vantage", symbol)
+
+    # ── 2. Alpha Vantage fallback ─────────────────────────────────────────────
     if is_crypto:
         _throttle_alpha_vantage()
-        data = _safe_get(
+        av_data = _safe_get(
             ALPHA_VANTAGE_BASE_URL,
             params={
                 "function": "DIGITAL_CURRENCY_DAILY",
@@ -595,14 +641,14 @@ def fetch_stock_candles(symbol: str, resolution: str = "D",
                 "apikey":   ALPHA_VANTAGE_API_KEY,
             },
         )
-        ts_key = "Time Series (Digital Currency Daily)"
+        ts_key    = "Time Series (Digital Currency Daily)"
         open_key  = "1a. open (USD)"
         high_key  = "2a. high (USD)"
         low_key   = "3a. low (USD)"
         close_key = "4a. close (USD)"
         vol_key   = "5. volume"
     else:
-        data = _safe_get(
+        av_data = _safe_get(
             ALPHA_VANTAGE_BASE_URL,
             params={
                 "function":   "TIME_SERIES_DAILY",
@@ -618,10 +664,11 @@ def fetch_stock_candles(symbol: str, resolution: str = "D",
         close_key = "4. close"
         vol_key   = "5. volume"
 
-    if not data or ts_key not in data:
+    if not av_data or ts_key not in av_data:
+        logger.error("Alpha Vantage also failed for %s", symbol)
         return None
 
-    ts_data = data[ts_key]
+    ts_data = av_data[ts_key]
     sorted_dates = sorted(ts_data.keys())
 
     if from_ts:

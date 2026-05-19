@@ -86,6 +86,81 @@ def _score_social_posts(raw_posts: list[dict]) -> list[dict]:
     return raw_posts
 
 
+def _compute_and_write_aggregates():
+    """Compute sentiment aggregates from all SQLite articles and write to aggregates.json."""
+    import sqlite3
+    from collections import defaultdict
+    from storage.json_writer import write_aggregates
+    from config.settings import SQLITE_DB_PATH as db_path
+
+    if not os.path.exists(db_path):
+        return
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT source, sentiment, sentiment_score, published, tickers FROM articles"
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return
+
+    by_source = defaultdict(lambda: {"positive": 0, "neutral": 0, "negative": 0, "total": 0, "score_sum": 0.0})
+    by_asset  = defaultdict(lambda: {"positive": 0, "neutral": 0, "negative": 0, "total": 0, "score_sum": 0.0})
+    by_time   = defaultdict(lambda: {"positive": 0, "neutral": 0, "negative": 0, "total": 0})
+    dist      = {"positive": 0, "neutral": 0, "negative": 0}
+
+    for r in rows:
+        s   = r["sentiment"] or "neutral"
+        src = r["source"] or "unknown"
+        score = r["sentiment_score"] or 0.0
+        date  = (r["published"] or "")[:10]
+
+        by_source[src][s]        += 1
+        by_source[src]["total"]  += 1
+        by_source[src]["score_sum"] += score
+
+        if date:
+            by_time[date][s]       += 1
+            by_time[date]["total"] += 1
+
+        dist[s] += 1
+
+        try:
+            tickers = json.loads(r["tickers"]) if isinstance(r["tickers"], str) else (r["tickers"] or [])
+        except Exception:
+            tickers = []
+        for t in (tickers if isinstance(tickers, list) else []):
+            by_asset[t][s]        += 1
+            by_asset[t]["total"]  += 1
+            by_asset[t]["score_sum"] += score
+
+    def _fmt_src(k, v):
+        total = v["total"] or 1
+        return {"source": k, "key": k, "positive": v["positive"], "neutral": v["neutral"],
+                "negative": v["negative"], "total": v["total"],
+                "avg_score": round(v["score_sum"] / total, 4)}
+
+    def _fmt_asset(k, v):
+        total = v["total"] or 1
+        return {"ticker": k, "key": k, "positive": v["positive"], "neutral": v["neutral"],
+                "negative": v["negative"], "total": v["total"],
+                "avg_score": round(v["score_sum"] / total, 4)}
+
+    def _fmt_time(k, v):
+        return {"date": k, "key": k, "positive": v["positive"], "neutral": v["neutral"],
+                "negative": v["negative"], "total": v["total"]}
+
+    write_aggregates({
+        "by_source":    [_fmt_src(k, v)   for k, v in sorted(by_source.items(), key=lambda x: -x[1]["total"])],
+        "by_asset":     [_fmt_asset(k, v) for k, v in sorted(by_asset.items(),  key=lambda x: -x[1]["total"])],
+        "by_time":      [_fmt_time(k, v)  for k, v in sorted(by_time.items())[-7:]],
+        "distribution": dist,
+        "top_movers":   [],
+    })
+
+
 def _store_articles(articles: list[dict]):
     """Persist cleaned+scored articles to JSON + SQLite + Pinecone."""
     if not articles:
@@ -96,6 +171,10 @@ def _store_articles(articles: list[dict]):
     write_articles(articles)
     init_tables()
     upsert_articles(articles)
+    try:
+        _compute_and_write_aggregates()
+    except Exception as _agg_exc:
+        logger.warning("Aggregates update skipped: %s", _agg_exc)
 
     try:
         from storage.pinecone_writer import upsert_articles as pc_upsert
@@ -130,9 +209,10 @@ def _store_price_bars(bars: list[dict], spark):
     import tempfile
     from processing.stock_analytics import compute_price_analytics, latest_price_snapshot
     from storage.json_writer import write_prices
-    from storage.sqlite_writer import upsert_price_bars, upsert_price_snapshot
+    from storage.sqlite_writer import init_tables, upsert_price_bars, upsert_price_snapshot
     from storage.pinecone_writer import upsert_price_bars as pc_upsert_bars
 
+    init_tables()
     tmp = os.path.join(tempfile.gettempdir(), "finintel_stream_prices.json")
     with open(tmp, "w", encoding="utf-8") as f:
         for b in bars:
@@ -302,9 +382,8 @@ def _kafka_stream(spark, topic: str):
         .format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BROKER)
         .option("subscribe", topic)
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
-        .option("kafka.group.id", f"finintel-streaming-{topic}")
         .load()
         .selectExpr("CAST(value AS STRING) AS value")
     )

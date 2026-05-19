@@ -32,11 +32,16 @@ def _ensure_dir():
 
 
 def write_articles(articles: list):
-    """Write processed articles to JSON."""
+    """Merge new articles into the existing JSON, keeping up to 500 most recent."""
     _ensure_dir()
+    existing = read_articles()
+    existing_ids = {a.get("id") for a in existing if a.get("id")}
+    merged = existing + [a for a in articles if a.get("id") not in existing_ids]
+    merged.sort(key=lambda a: a.get("published", a.get("published_at", a.get("ingested_at", ""))), reverse=True)
+    merged = merged[:500]
     with open(PROCESSED_ARTICLES_PATH, "w", encoding="utf-8") as f:
-        json.dump(articles, f, indent=2, ensure_ascii=False, default=str)
-    logger.info("Wrote %d articles → %s", len(articles), PROCESSED_ARTICLES_PATH)
+        json.dump(merged, f, indent=2, ensure_ascii=False, default=str)
+    logger.info("Wrote %d articles (total) → %s", len(merged), PROCESSED_ARTICLES_PATH)
 
 
 def write_prices(snapshot: dict):

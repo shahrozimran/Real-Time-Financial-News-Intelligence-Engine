@@ -220,7 +220,7 @@
           7-Day Sentiment Trend
           <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400">News + social media combined score</span>
         </div>
-        <div class="g-card-body chart-container" style="height:200px">
+        <div class="g-card-body chart-container" style="height:230px">
           <canvas id="sentimentChart"></canvas>
         </div>
       </div>
@@ -350,7 +350,7 @@
             <div class="header-icon hi-cyan"><i class="bi bi-graph-up"></i></div>
             7-Day Sentiment Trend
           </div>
-          <div class="g-card-body chart-container" style="height:260px">
+          <div class="g-card-body chart-container" style="height:300px">
             <canvas id="sentimentChart2"></canvas>
           </div>
         </div>
@@ -878,10 +878,14 @@ function filterNews(sentiment, tab) {
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { labels: { color: '#7a9abf', boxWidth: 10, font: { size: 11 } } }, tooltip: { mode: 'index', intersect: false } },
+  layout: { padding: { top: 4, right: 6, bottom: 4, left: 4 } },
+  plugins: {
+    legend: { position: 'bottom', labels: { color: '#7a9abf', boxWidth: 10, font: { size: 11 }, padding: 14 } },
+    tooltip: { mode: 'index', intersect: false }
+  },
   scales: {
     x: { ticks: { color: '#3f5c7a', font:{ size:10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-    y: { ticks: { color: '#3f5c7a', font:{ size:10 } }, grid: { color: 'rgba(255,255,255,0.04)' }, min: 0, max: 100 },
+    y: { ticks: { color: '#3f5c7a', font:{ size:10 } }, grid: { color: 'rgba(255,255,255,0.04)' }, min: 0 },
   },
 };
 
@@ -1608,10 +1612,12 @@ async function refreshAll(btn) {
 // ── Init ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   startClock();
-  await Promise.all([loadPrices(), loadNews(), loadSentimentCharts(), loadRiskAlerts()]);
 
-  // Hide loader
-  setTimeout(() => document.getElementById('page-loader').classList.add('hidden'), 400);
+  // Hide loader after 4 seconds max — don't block on slow APIs (e.g. rate-limited prices)
+  setTimeout(() => document.getElementById('page-loader').classList.add('hidden'), 4000);
+
+  // Load all data in background (non-blocking)
+  Promise.all([loadPrices(), loadNews(), loadSentimentCharts(), loadRiskAlerts()]);
 
   // Show sidebar toggle on mobile
   if (window.innerWidth < 992) {
