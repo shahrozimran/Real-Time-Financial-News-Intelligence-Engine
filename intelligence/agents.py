@@ -57,6 +57,12 @@ def _get_llm():
     global _llm
     if _llm is not None:
         return _llm
+    if not OPENROUTER_API_KEY or OPENROUTER_API_KEY == "your_openrouter_api_key_here":
+        raise ValueError(
+            "OPENROUTER_API_KEY is not configured. "
+            "Open your .env file and set OPENROUTER_API_KEY to your OpenRouter API key "
+            "(get one at https://openrouter.ai/)."
+        )
     from langchain_openai import ChatOpenAI
     _llm = ChatOpenAI(
         model=LLM_MODEL,

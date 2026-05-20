@@ -803,11 +803,21 @@ Default CMD: python webapp/app.py
 | `streaming-pipeline` | `finintel-streaming-pipeline` | `python processing/streaming_pipeline.py --topic all` | `unless-stopped` |
 | `batch-pipeline` | `finintel-batch-pipeline` | `python processing/batch_pipeline.py --source live` | — (run manually) |
 
-### Docker Volumes
-| Volume | Mounted At | Contents |
+**`streaming-pipeline` service — additional environment variables (added v2):**
+
+| Variable | Value | Purpose |
 |---|---|---|
-| `kafka_data` | `/var/lib/kafka/data` | Kafka log segments, topic partition data |
-| `app_data` | `/app/data` | Processed JSON, SQLite DB, Spark checkpoints |
+| `HF_HOME` | `/hf_cache` | Redirects HuggingFace Hub cache to the persistent Docker volume |
+| `TRANSFORMERS_CACHE` | `/hf_cache` | Redirects `transformers` model cache to the same persistent volume |
+
+> These two variables ensure the FinBERT model (~400 MB) is downloaded only **once** and persisted across container restarts via the `hf_cache` named volume. Without them, every `docker compose up` would trigger a fresh model download.
+
+### Docker Volumes
+| Volume | Mounted At | Service(s) | Contents |
+|---|---|---|---|
+| `kafka_data` | `/var/lib/kafka/data` | `kafka` | Kafka log segments, topic partition data |
+| `app_data` | `/app/data` | `webapp`, `streaming-pipeline`, `batch-pipeline` | Processed JSON, SQLite DB, Spark checkpoints |
+| `hf_cache` | `/hf_cache` | `streaming-pipeline` | Cached HuggingFace models (FinBERT ~400 MB) — persisted across restarts |
 
 ### Docker Compose Profiles
 - `streaming` profile → enables `streaming-pipeline` service
@@ -854,6 +864,8 @@ All configuration is loaded from environment variables via `python-dotenv` (`.en
 | `FLASK_DEBUG` | Webapp | Default: `true` |
 | `SPARK_MASTER` | Processing | Default: `local[*]` |
 | `STREAMING_TRIGGER_SECONDS` | Streaming | Default: `30` |
+| `HF_HOME` | Streaming Pipeline (Docker) | `/hf_cache` — persistent HuggingFace Hub cache directory |
+| `TRANSFORMERS_CACHE` | Streaming Pipeline (Docker) | `/hf_cache` — persistent Transformers model cache directory |
 
 ---
 
@@ -979,5 +991,24 @@ All endpoints served by Flask at `http://localhost:5000` (or port 80 in Docker).
 
 ---
 
+---
+
+## 18. Changelog / Version History
+
+This section records every infrastructure and configuration change made after the initial architecture was established.
+
+| Version | File Changed | What Changed | Why |
+|---|---|---|---|
+| v1 | `docker-compose.yml` | Initial setup: `kafka`, `kafka-init`, `webapp`, `rss-producer`, `stock-producer`, `social-producer` services | Week 1 baseline |
+| v1 | `docker-compose.yml` | `streaming-pipeline` service added (profile: `streaming`) | Week 2 — PySpark Structured Streaming |
+| v1 | `docker-compose.yml` | `batch-pipeline` service added (profile: `pipeline`) | Week 2 — full batch run support |
+| v1 | `docker-compose.yml` | Named volumes: `kafka_data`, `app_data` | Persist Kafka data and processed pipeline output |
+| **v2** | **`docker-compose.yml`** | **`streaming-pipeline` — added `HF_HOME=/hf_cache` and `TRANSFORMERS_CACHE=/hf_cache` env vars** | **Prevent FinBERT (~400 MB) from re-downloading on every container restart** |
+| **v2** | **`docker-compose.yml`** | **`streaming-pipeline` — added `hf_cache:/hf_cache` volume mount** | **Persistent model cache storage across container lifecycle** |
+| **v2** | **`docker-compose.yml`** | **New named volume `hf_cache` declared in top-level `volumes:` block** | **Docker-managed persistent volume for HuggingFace model files** |
+
+---
+
 *Report generated for: Real-Time Financial News Intelligence Engine*
 *Architecture covers Weeks 1–4: Data Ingestion → Streaming → NLP → Vector DB → Multi-Agent AI*
+*Last updated: v2 — FinBERT persistent cache volume added to streaming-pipeline*

@@ -48,6 +48,12 @@ def _get_openai_client():
     global _openai_client
     if _openai_client is not None:
         return _openai_client
+    if not OPENROUTER_API_KEY or OPENROUTER_API_KEY == "your_openrouter_api_key_here":
+        raise ValueError(
+            "OPENROUTER_API_KEY is not configured. "
+            "Open your .env file and set OPENROUTER_API_KEY to your OpenRouter API key "
+            "(get one at https://openrouter.ai/)."
+        )
     import openai
     _openai_client = openai.OpenAI(
         api_key=OPENROUTER_API_KEY,
